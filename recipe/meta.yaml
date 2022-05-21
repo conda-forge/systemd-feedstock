@@ -1,6 +1,6 @@
 {% set name = "systemd" %}
-{% set version = "249" %}
-{% set build = 2 %}
+{% set version = "250" %}
+{% set build = 0 %}
 {% set libudev_abi_version = "1" %}
 {% set libsystemd_abi_version = "0" %}
 
@@ -10,7 +10,7 @@ package:
 
 source:
   url: https://github.com/{{ name }}/{{ name }}/archive/v{{ version }}.tar.gz
-  sha256: 174091ce5f2c02123f76d546622b14078097af105870086d18d55c1c2667d855
+  sha256: 389935dea020caf6e2e81a4e90e556bd5599a2086861045efdc06197776e94e1
   patches:
     # remove for systemd >= 250
     - 0001-meson.build-change-operator-combining-bools-from-to-.patch
