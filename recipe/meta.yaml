@@ -1,6 +1,6 @@
 {% set name = "systemd" %}
-{% set version = "255" %}
-{% set build = 1 %}
+{% set version = "256" %}
+{% set build = 0 %}
 {% set libudev_abi_version = "1" %}
 {% set libsystemd_abi_version = "0" %}
 
@@ -10,7 +10,7 @@ package:
 
 source:
   url: https://github.com/{{ name }}/{{ name }}/archive/v{{ version }}.tar.gz
-  sha256: 28854ffb2cb5f9e07fcbdbaf1e03a80b3462a12edeef84893ca2f37b22e4491e
+  sha256: 4825b82700e1acf02ba81885652406e75d0c674c129a1a7e488e5b5200a17998
   patches:
     - 0001-sd-netlink-define-NFPROTO_NETDEV-for-linux-headers-4.patch
     - 0002-loop-util-define-LOOP_SET_BLOCK_SIZE-for-linux-heade.patch
@@ -22,6 +22,7 @@ build:
 requirements:
   build:
     - {{ compiler('c') }}
+    - {{ stdlib("c") }}
     - coreutils
     - gperf
     - jinja2
@@ -29,7 +30,6 @@ requirements:
     - ninja
     - pkg-config
     - python *
-    - sysroot_linux-64 2.17  # [linux64]
   host:
     - elfutils
     - libacl
@@ -51,7 +51,7 @@ outputs:
     requirements:
       build:
         - {{ compiler('c') }}
-        - sysroot_linux-64 2.17  # [linux64]
+        - {{ stdlib("c") }}
       host:
         - libcap
     test:
@@ -106,7 +106,7 @@ outputs:
     requirements:
       build:
         - {{ compiler('c') }}
-        - sysroot_linux-64 2.17  # [linux64]
+        - {{ stdlib("c") }}
       host:
         - libcap
         - libgcrypt
