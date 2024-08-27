@@ -14,6 +14,7 @@ source:
   patches:
     - 0001-sd-netlink-define-NFPROTO_NETDEV-for-linux-headers-4.patch
     - 0002-loop-util-define-LOOP_SET_BLOCK_SIZE-for-linux-heade.patch
+    - 0003-missing_input-Fix-typo-defining-KEY_ALS_TOGGLE.patch
 
 build:
   number: {{ build }}

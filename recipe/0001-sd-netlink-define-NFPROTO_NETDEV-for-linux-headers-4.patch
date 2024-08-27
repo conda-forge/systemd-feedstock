@@ -36,7 +36,7 @@ index fd3055d879..9495a5903c 100644
  #include "netlink-types.h"
  #include "netlink-util.h"
 diff --git a/src/shared/firewall-util-nft.c b/src/shared/firewall-util-nft.c
-index fe986ed212..0a96377856 100644
+index e9bd286786..5af3faf93a 100644
 --- a/src/shared/firewall-util-nft.c
 +++ b/src/shared/firewall-util-nft.c
 @@ -20,6 +20,7 @@

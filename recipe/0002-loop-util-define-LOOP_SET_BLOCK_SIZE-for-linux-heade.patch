@@ -9,11 +9,11 @@ Subject: [PATCH] loop-util: define LOOP_SET_BLOCK_SIZE for linux headers <
  1 file changed, 4 insertions(+)
 
 diff --git a/src/basic/missing_loop.h b/src/basic/missing_loop.h
-index 7141544b64..6ad630cb3e 100644
+index b88501d78b..a3673e7656 100644
 --- a/src/basic/missing_loop.h
 +++ b/src/basic/missing_loop.h
-@@ -19,6 +19,10 @@ struct loop_config {
- #define LOOP_SET_DIRECT_IO 0x4C08
+@@ -26,6 +26,10 @@ assert_cc(LO_FLAGS_DIRECT_IO == 16);
+ assert_cc(LOOP_SET_DIRECT_IO == 0x4C08);
  #endif
  
 +#ifndef LOOP_SET_BLOCK_SIZE
@@ -21,7 +21,7 @@ index 7141544b64..6ad630cb3e 100644
 +#endif
 +
  #ifndef LOOP_SET_STATUS_SETTABLE_FLAGS
- #define LOOP_SET_STATUS_SETTABLE_FLAGS (LO_FLAGS_AUTOCLEAR | LO_FLAGS_PARTSCAN | LO_FLAGS_DIRECT_IO)
+ #  define LOOP_SET_STATUS_SETTABLE_FLAGS (LO_FLAGS_AUTOCLEAR | LO_FLAGS_PARTSCAN)
  #endif
 -- 
 2.34.1
