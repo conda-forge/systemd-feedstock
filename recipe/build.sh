@@ -5,10 +5,7 @@ set -ex
 mkdir forgebuild
 
 meson_config_args=(
-    --buildtype=release
-    -Dlibdir=lib
     -Dmode=release
-    --prefix=$PREFIX
     -Drootprefix=$PREFIX
     -Dsplit-usr=false
     -Dsplit-bin=false
