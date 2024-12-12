@@ -18,6 +18,8 @@ elfutils:
 - '0.192'
 libcap:
 - '2.71'
+liblzma_devel:
+- '5'
 lz4_c:
 - '1.10'
 openssl:
@@ -26,7 +28,5 @@ p11_kit:
 - '0.24'
 target_platform:
 - linux-aarch64
-xz:
-- '5'
 zstd:
 - '1.5'
