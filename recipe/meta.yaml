@@ -13,8 +13,8 @@ source:
   sha256: 7f2bc3253e4f87578132c5e433ef9ff7e8fee01d9eb5a5b7c64376d617f694d0
   patches:
     - 0001-sd-netlink-define-NFPROTO_NETDEV-for-linux-headers-4.patch
-    - 0002-loop-util-define-LOOP_SET_BLOCK_SIZE-for-linux-heade.patch
-    - 0003-missing_input-Fix-typo-defining-KEY_ALS_TOGGLE.patch
+    - 0002-missing_input-Fix-typo-defining-KEY_ALS_TOGGLE.patch
+    - 0003-missing_sched-add-define-for-CLONE_PIDFD-added-in-Li.patch
 
 build:
   number: {{ build }}
