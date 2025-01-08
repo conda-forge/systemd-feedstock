@@ -1,6 +1,6 @@
 {% set name = "systemd" %}
-{% set version = "256.9" %}
-{% set build = 3 %}
+{% set version = "257.2" %}
+{% set build = 0 %}
 {% set libudev_abi_version = "1" %}
 {% set libsystemd_abi_version = "0" %}
 
@@ -10,11 +10,12 @@ package:
 
 source:
   url: https://github.com/{{ name }}/{{ name }}/archive/v{{ version }}.tar.gz
-  sha256: 9f2bda967a30ec4602e7ea93d565eb43670ca1dffbb808c72758d5f0213508c8
+  sha256: 7f2bc3253e4f87578132c5e433ef9ff7e8fee01d9eb5a5b7c64376d617f694d0
   patches:
     - 0001-sd-netlink-define-NFPROTO_NETDEV-for-linux-headers-4.patch
-    - 0002-loop-util-define-LOOP_SET_BLOCK_SIZE-for-linux-heade.patch
-    - 0003-missing_input-Fix-typo-defining-KEY_ALS_TOGGLE.patch
+    - 0002-missing_input-Fix-typo-defining-KEY_ALS_TOGGLE.patch
+    - 0003-missing_sched-add-define-for-CLONE_PIDFD-added-in-Li.patch
+    - 0004-terminal-util-define-TIOCGPTPEER-for-linux-4.13.patch
 
 build:
   number: {{ build }}

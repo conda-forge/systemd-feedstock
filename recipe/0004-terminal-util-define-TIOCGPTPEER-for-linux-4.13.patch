@@ -1,0 +1,43 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Ryan Volz <ryan.volz@gmail.com>
+Date: Wed, 8 Jan 2025 17:36:39 -0500
+Subject: [PATCH] terminal-util: define TIOCGPTPEER for linux < 4.13
+
+---
+ src/basic/missing_ioctls.h | 11 +++++++++++
+ src/basic/terminal-util.c  |  1 +
+ 2 files changed, 12 insertions(+)
+ create mode 100644 src/basic/missing_ioctls.h
+
+diff --git a/src/basic/missing_ioctls.h b/src/basic/missing_ioctls.h
+new file mode 100644
+index 0000000000..6f00caf02a
+--- /dev/null
++++ b/src/basic/missing_ioctls.h
+@@ -0,0 +1,11 @@
++/* SPDX-License-Identifier: LGPL-2.1-or-later */
++#pragma once
++
++#include <asm/ioctls.h>
++
++/* c6325179238f1d4683edbec53d8322575d76d7e2 (4.13) */
++#ifndef TIOCGPTPEER
++#  define TIOCGPTPEER _IO('T', 0x41)
++#else
++assert_cc(TIOCGPTPEER == _IO('T', 0x41));
++#endif
+diff --git a/src/basic/terminal-util.c b/src/basic/terminal-util.c
+index 409f2abb45..72e2e1271d 100644
+--- a/src/basic/terminal-util.c
++++ b/src/basic/terminal-util.c
+@@ -35,6 +35,7 @@
+ #include "io-util.h"
+ #include "log.h"
+ #include "macro.h"
++#include "missing_ioctls.h"
+ #include "missing_magic.h"
+ #include "namespace-util.h"
+ #include "parse-util.h"
+-- 
+2.46.0
+
