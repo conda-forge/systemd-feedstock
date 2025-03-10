@@ -17,7 +17,7 @@ docker_image:
 elfutils:
 - '0.192'
 libcap:
-- '2.71'
+- '2.75'
 liblzma_devel:
 - '5'
 lz4_c:
