@@ -34,28 +34,6 @@ configuration, network time synchronization, log forwarding, and name
 resolution.
 
 
-About libsystemd0
------------------
-
-Home: https://www.freedesktop.org/wiki/Software/systemd/
-
-Package license: LGPL-2.1-or-later
-
-Summary: Library for interfacing with systemd
-
-Development: https://github.com/systemd/systemd
-
-About libudev1
---------------
-
-Home: https://www.freedesktop.org/wiki/Software/systemd/
-
-Package license: LGPL-2.1-or-later
-
-Summary: Library to access udev device information
-
-Development: https://github.com/systemd/systemd
-
 About libsystemd
 ----------------
 
@@ -67,6 +45,17 @@ Summary: Development package for the systemd library
 
 Development: https://github.com/systemd/systemd
 
+About libsystemd0
+-----------------
+
+Home: https://www.freedesktop.org/wiki/Software/systemd/
+
+Package license: LGPL-2.1-or-later
+
+Summary: Library for interfacing with systemd
+
+Development: https://github.com/systemd/systemd
+
 About libudev
 -------------
 
@@ -75,6 +64,17 @@ Home: https://www.freedesktop.org/wiki/Software/systemd/
 Package license: LGPL-2.1-or-later
 
 Summary: Development package for the udev library
+
+Development: https://github.com/systemd/systemd
+
+About libudev1
+--------------
+
+Home: https://www.freedesktop.org/wiki/Software/systemd/
+
+Package license: LGPL-2.1-or-later
+
+Summary: Library to access udev device information
 
 Development: https://github.com/systemd/systemd
 
