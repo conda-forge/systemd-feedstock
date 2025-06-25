@@ -1,5 +1,5 @@
 {% set name = "systemd" %}
-{% set version = "257.6" %}
+{% set version = "257.7" %}
 {% set build = 0 %}
 {% set libudev_abi_version = "1" %}
 {% set libsystemd_abi_version = "0" %}
@@ -10,7 +10,7 @@ package:
 
 source:
   url: https://github.com/{{ name }}/{{ name }}/archive/v{{ version }}.tar.gz
-  sha256: 1ac656c61e595cc6e653883d554caadd2053f323d9065c0daff69f83368b120c
+  sha256: 70ecf759260549486045d065555d2f8a0ac0b8523d8f58227559fbd6d7523b08
   patches:
     - 0001-sd-netlink-define-NFPROTO_NETDEV-for-linux-headers-4.patch
     - 0002-missing_input-Fix-typo-defining-KEY_ALS_TOGGLE.patch
