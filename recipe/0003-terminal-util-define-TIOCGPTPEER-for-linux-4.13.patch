@@ -11,7 +11,7 @@ Subject: [PATCH] terminal-util: define TIOCGPTPEER for linux < 4.13
 
 diff --git a/src/basic/missing_ioctls.h b/src/basic/missing_ioctls.h
 new file mode 100644
-index 0000000000..6f00caf02a
+index 0000000..6f00caf
 --- /dev/null
 +++ b/src/basic/missing_ioctls.h
 @@ -0,0 +1,11 @@
@@ -27,7 +27,7 @@ index 0000000000..6f00caf02a
 +assert_cc(TIOCGPTPEER == _IO('T', 0x41));
 +#endif
 diff --git a/src/basic/terminal-util.c b/src/basic/terminal-util.c
-index 409f2abb45..72e2e1271d 100644
+index 02df893..570f35b 100644
 --- a/src/basic/terminal-util.c
 +++ b/src/basic/terminal-util.c
 @@ -35,6 +35,7 @@
@@ -39,5 +39,5 @@ index 409f2abb45..72e2e1271d 100644
  #include "namespace-util.h"
  #include "parse-util.h"
 -- 
-2.47.1
+2.51.0
 

@@ -8,7 +8,7 @@ Subject: [PATCH] missing_input: Fix typo defining KEY_ALS_TOGGLE
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/src/basic/missing_input.h b/src/basic/missing_input.h
-index ee61bf99d6..a095c49697 100644
+index ee61bf9..a095c49 100644
 --- a/src/basic/missing_input.h
 +++ b/src/basic/missing_input.h
 @@ -52,7 +52,7 @@ assert_cc(BTN_DPAD_RIGHT == 0x223);
@@ -21,5 +21,5 @@ index ee61bf99d6..a095c49697 100644
  assert_cc(KEY_ALS_TOGGLE == 0x230);
  #endif
 -- 
-2.47.1
+2.51.0
 
