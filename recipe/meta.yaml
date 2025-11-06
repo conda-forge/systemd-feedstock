@@ -11,10 +11,6 @@ package:
 source:
   url: https://github.com/{{ name }}/{{ name }}/archive/v{{ version }}.tar.gz
   sha256: 8eb34eaf2f78330217280bd7a923578f37e28d3f3ac5168e336ebc9cad84a34d
-  patches:
-    - 0001-sd-netlink-define-NFPROTO_NETDEV-for-linux-headers-4.patch
-    - 0002-terminal-util-define-TIOCGPTPEER-for-linux-4.13.patch
-    - 0003-nspawn-seccomp-Include-missing_capability.h-so-CAP_B.patch
 
 build:
   number: {{ build }}
