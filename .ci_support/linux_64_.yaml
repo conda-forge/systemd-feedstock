@@ -18,6 +18,10 @@ libcap:
 - '2.76'
 liblzma_devel:
 - '5'
+libsystemd:
+- '257'
+libudev:
+- '257'
 lz4_c:
 - '1.10'
 openssl:
