@@ -111,10 +111,6 @@ outputs:
         - {{ stdlib("c") }}
       host:
         - libcap
-        - libgcrypt
-        - lz4-c
-        - liblzma-devel
-        - zstd
     test:
       commands:
         # verify that library and its symlink gets installed
