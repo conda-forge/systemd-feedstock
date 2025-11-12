@@ -15,7 +15,7 @@ docker_image:
 elfutils:
 - '0.193'
 libcap:
-- '2.76'
+- '2.77'
 liblzma_devel:
 - '5'
 libsystemd:
