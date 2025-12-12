@@ -13,7 +13,7 @@ channel_targets:
 docker_image:
 - quay.io/condaforge/linux-anvil-x86_64:alma9
 elfutils:
-- '0.193'
+- '0.194'
 libcap:
 - '2.77'
 liblzma_devel:
