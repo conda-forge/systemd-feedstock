@@ -27,7 +27,7 @@ lz4_c:
 openssl:
 - '3.5'
 p11_kit:
-- '0.24'
+- '0.26'
 target_platform:
 - linux-aarch64
 zstd:
