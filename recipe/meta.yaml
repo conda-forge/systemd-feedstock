@@ -1,5 +1,5 @@
 {% set name = "systemd" %}
-{% set version = "260.1" %}
+{% set version = "260.2" %}
 {% set build = 0 %}
 {% set libudev_abi_version = "1" %}
 {% set libsystemd_abi_version = "0" %}
@@ -10,7 +10,7 @@ package:
 
 source:
   url: https://github.com/{{ name }}/{{ name }}/archive/v{{ version }}.tar.gz
-  sha256: 11b9821892b75d19af7b21f0f7f4e53636638147faf3e6a4ded78b40cb38993f
+  sha256: 71a9ed11cf773478b0d7a16cd96e39ca3c3939ab37ed9a8ee814c31ea9b4f2b5
 
 build:
   number: {{ build }}
