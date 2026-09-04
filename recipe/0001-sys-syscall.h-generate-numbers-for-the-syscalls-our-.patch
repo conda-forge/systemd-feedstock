@@ -1,0 +1,926 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mark Harfouche <mark.harfouche@gmail.com>
+Date: Thu, 3 Sep 2026 21:48:12 -0400
+Subject: [PATCH] sys/syscall.h: generate numbers for the syscalls our shims
+ dispatch
+
+The wrappers in src/libc/ fall back to a raw syscall() when the libc they
+run against has no matching symbol, which needs __NR_* to be defined at
+build time. Kernel headers older than the syscall in question don't define
+it, so building against e.g. the 3.10 UAPI headers shipped by a
+CentOS 7-era sysroot fails with "'__NR_openat2' undeclared".
+
+Add the syscalls behind those shims -- plus close_range() and execveat(),
+which the glibc compat wrappers need -- to the generator's list and
+regenerate. The emitted blocks static_assert() against the kernel header
+whenever it does define the number, so this stays self-checking.
+---
+ src/include/override/sys/generate-syscall.py |  12 +
+ src/include/override/sys/syscall.h           | 840 +++++++++++++++++++
+ 2 files changed, 852 insertions(+)
+
+diff --git a/src/include/override/sys/generate-syscall.py b/src/include/override/sys/generate-syscall.py
+index ba44c93..5084ec7 100755
+--- a/src/include/override/sys/generate-syscall.py
++++ b/src/include/override/sys/generate-syscall.py
+@@ -6,12 +6,24 @@ import sys
+ 
+ # We only generate numbers for a dozen or so syscalls
+ SYSCALLS = [
++    'close_range',   # defined in glibc header since glibc-2.34
++    'execveat',      # defined in glibc header since glibc-2.34
+     'fchmodat2',     # defined in glibc header since glibc-2.39
++    'fsconfig',
++    'fsmount',
++    'fsopen',
+     'kexec_file_load',
++    'mount_setattr',
++    'move_mount',
++    'openat2',
++    'open_tree',
+     'open_tree_attr',
++    'pidfd_open',    # defined in glibc header since glibc-2.36
++    'pidfd_send_signal',
+     'quotactl_fd',   # defined in glibc header since glibc-2.35
+     'removexattrat',
+     'setxattrat',
++    'statx',         # defined in glibc header since glibc-2.28
+ ]  # fmt: skip
+ 
+ 
+diff --git a/src/include/override/sys/syscall.h b/src/include/override/sys/syscall.h
+index da555e7..529696b 100644
+--- a/src/include/override/sys/syscall.h
++++ b/src/include/override/sys/syscall.h
+@@ -54,6 +54,146 @@
+ #    define missing_arch_template 1
+ #  endif
+ 
++#ifndef __IGNORE_close_range
++#  if defined(__aarch64__)
++#    define systemd_NR_close_range 436
++#  elif defined(__alpha__)
++#    define systemd_NR_close_range 546
++#  elif defined(__arc__) || defined(__tilegx__)
++#    define systemd_NR_close_range 436
++#  elif defined(__arm__)
++#    define systemd_NR_close_range 436
++#  elif defined(__i386__)
++#    define systemd_NR_close_range 436
++#  elif defined(__ia64__)
++#    define systemd_NR_close_range 1460
++#  elif defined(__loongarch_lp64)
++#    define systemd_NR_close_range 436
++#  elif defined(__m68k__)
++#    define systemd_NR_close_range 436
++#  elif defined(_MIPS_SIM)
++#    if _MIPS_SIM == _MIPS_SIM_ABI32
++#      define systemd_NR_close_range 4436
++#    elif _MIPS_SIM == _MIPS_SIM_NABI32
++#      define systemd_NR_close_range 6436
++#    elif _MIPS_SIM == _MIPS_SIM_ABI64
++#      define systemd_NR_close_range 5436
++#    else
++#      error "Unknown MIPS ABI"
++#    endif
++#  elif defined(__hppa__)
++#    define systemd_NR_close_range 436
++#  elif defined(__powerpc__)
++#    define systemd_NR_close_range 436
++#  elif defined(__riscv)
++#    if __riscv_xlen == 32
++#      define systemd_NR_close_range 436
++#    elif __riscv_xlen == 64
++#      define systemd_NR_close_range 436
++#    else
++#      error "Unknown RISC-V ABI"
++#    endif
++#  elif defined(__s390__)
++#    define systemd_NR_close_range 436
++#  elif defined(__sh__)
++#    define systemd_NR_close_range 436
++#  elif defined(__sparc__)
++#    define systemd_NR_close_range 436
++#  elif defined(__x86_64__)
++#    if defined(__ILP32__)
++#      define systemd_NR_close_range (436 | /* __X32_SYSCALL_BIT */ 0x40000000)
++#    else
++#      define systemd_NR_close_range 436
++#    endif
++#  elif !defined(missing_arch_template)
++#    warning "close_range() syscall number is unknown for your architecture"
++#  endif
++
++/* may be an (invalid) negative number due to libseccomp, see PR 13319 */
++#  if defined __NR_close_range && __NR_close_range >= 0
++#    if defined systemd_NR_close_range
++static_assert(__NR_close_range == systemd_NR_close_range, "");
++#    endif
++#  else
++#    if defined __NR_close_range
++#      undef __NR_close_range
++#    endif
++#    if defined systemd_NR_close_range && systemd_NR_close_range >= 0
++#      define __NR_close_range systemd_NR_close_range
++#    endif
++#  endif
++#endif
++
++#ifndef __IGNORE_execveat
++#  if defined(__aarch64__)
++#    define systemd_NR_execveat 281
++#  elif defined(__alpha__)
++#    define systemd_NR_execveat 513
++#  elif defined(__arc__) || defined(__tilegx__)
++#    define systemd_NR_execveat 281
++#  elif defined(__arm__)
++#    define systemd_NR_execveat 387
++#  elif defined(__i386__)
++#    define systemd_NR_execveat 358
++#  elif defined(__ia64__)
++#    define systemd_NR_execveat 1342
++#  elif defined(__loongarch_lp64)
++#    define systemd_NR_execveat 281
++#  elif defined(__m68k__)
++#    define systemd_NR_execveat 355
++#  elif defined(_MIPS_SIM)
++#    if _MIPS_SIM == _MIPS_SIM_ABI32
++#      define systemd_NR_execveat 4356
++#    elif _MIPS_SIM == _MIPS_SIM_NABI32
++#      define systemd_NR_execveat 6320
++#    elif _MIPS_SIM == _MIPS_SIM_ABI64
++#      define systemd_NR_execveat 5316
++#    else
++#      error "Unknown MIPS ABI"
++#    endif
++#  elif defined(__hppa__)
++#    define systemd_NR_execveat 342
++#  elif defined(__powerpc__)
++#    define systemd_NR_execveat 362
++#  elif defined(__riscv)
++#    if __riscv_xlen == 32
++#      define systemd_NR_execveat 281
++#    elif __riscv_xlen == 64
++#      define systemd_NR_execveat 281
++#    else
++#      error "Unknown RISC-V ABI"
++#    endif
++#  elif defined(__s390__)
++#    define systemd_NR_execveat 354
++#  elif defined(__sh__)
++#    define systemd_NR_execveat 376
++#  elif defined(__sparc__)
++#    define systemd_NR_execveat 350
++#  elif defined(__x86_64__)
++#    if defined(__ILP32__)
++#      define systemd_NR_execveat (322 | /* __X32_SYSCALL_BIT */ 0x40000000)
++#    else
++#      define systemd_NR_execveat 322
++#    endif
++#  elif !defined(missing_arch_template)
++#    warning "execveat() syscall number is unknown for your architecture"
++#  endif
++
++/* may be an (invalid) negative number due to libseccomp, see PR 13319 */
++#  if defined __NR_execveat && __NR_execveat >= 0
++#    if defined systemd_NR_execveat
++static_assert(__NR_execveat == systemd_NR_execveat, "");
++#    endif
++#  else
++#    if defined __NR_execveat
++#      undef __NR_execveat
++#    endif
++#    if defined systemd_NR_execveat && systemd_NR_execveat >= 0
++#      define __NR_execveat systemd_NR_execveat
++#    endif
++#  endif
++#endif
++
+ #ifndef __IGNORE_fchmodat2
+ #  if defined(__aarch64__)
+ #    define systemd_NR_fchmodat2 452
+@@ -124,6 +264,216 @@ static_assert(__NR_fchmodat2 == systemd_NR_fchmodat2, "");
+ #  endif
+ #endif
+ 
++#ifndef __IGNORE_fsconfig
++#  if defined(__aarch64__)
++#    define systemd_NR_fsconfig 431
++#  elif defined(__alpha__)
++#    define systemd_NR_fsconfig 541
++#  elif defined(__arc__) || defined(__tilegx__)
++#    define systemd_NR_fsconfig 431
++#  elif defined(__arm__)
++#    define systemd_NR_fsconfig 431
++#  elif defined(__i386__)
++#    define systemd_NR_fsconfig 431
++#  elif defined(__ia64__)
++#    define systemd_NR_fsconfig 1455
++#  elif defined(__loongarch_lp64)
++#    define systemd_NR_fsconfig 431
++#  elif defined(__m68k__)
++#    define systemd_NR_fsconfig 431
++#  elif defined(_MIPS_SIM)
++#    if _MIPS_SIM == _MIPS_SIM_ABI32
++#      define systemd_NR_fsconfig 4431
++#    elif _MIPS_SIM == _MIPS_SIM_NABI32
++#      define systemd_NR_fsconfig 6431
++#    elif _MIPS_SIM == _MIPS_SIM_ABI64
++#      define systemd_NR_fsconfig 5431
++#    else
++#      error "Unknown MIPS ABI"
++#    endif
++#  elif defined(__hppa__)
++#    define systemd_NR_fsconfig 431
++#  elif defined(__powerpc__)
++#    define systemd_NR_fsconfig 431
++#  elif defined(__riscv)
++#    if __riscv_xlen == 32
++#      define systemd_NR_fsconfig 431
++#    elif __riscv_xlen == 64
++#      define systemd_NR_fsconfig 431
++#    else
++#      error "Unknown RISC-V ABI"
++#    endif
++#  elif defined(__s390__)
++#    define systemd_NR_fsconfig 431
++#  elif defined(__sh__)
++#    define systemd_NR_fsconfig 431
++#  elif defined(__sparc__)
++#    define systemd_NR_fsconfig 431
++#  elif defined(__x86_64__)
++#    if defined(__ILP32__)
++#      define systemd_NR_fsconfig (431 | /* __X32_SYSCALL_BIT */ 0x40000000)
++#    else
++#      define systemd_NR_fsconfig 431
++#    endif
++#  elif !defined(missing_arch_template)
++#    warning "fsconfig() syscall number is unknown for your architecture"
++#  endif
++
++/* may be an (invalid) negative number due to libseccomp, see PR 13319 */
++#  if defined __NR_fsconfig && __NR_fsconfig >= 0
++#    if defined systemd_NR_fsconfig
++static_assert(__NR_fsconfig == systemd_NR_fsconfig, "");
++#    endif
++#  else
++#    if defined __NR_fsconfig
++#      undef __NR_fsconfig
++#    endif
++#    if defined systemd_NR_fsconfig && systemd_NR_fsconfig >= 0
++#      define __NR_fsconfig systemd_NR_fsconfig
++#    endif
++#  endif
++#endif
++
++#ifndef __IGNORE_fsmount
++#  if defined(__aarch64__)
++#    define systemd_NR_fsmount 432
++#  elif defined(__alpha__)
++#    define systemd_NR_fsmount 542
++#  elif defined(__arc__) || defined(__tilegx__)
++#    define systemd_NR_fsmount 432
++#  elif defined(__arm__)
++#    define systemd_NR_fsmount 432
++#  elif defined(__i386__)
++#    define systemd_NR_fsmount 432
++#  elif defined(__ia64__)
++#    define systemd_NR_fsmount 1456
++#  elif defined(__loongarch_lp64)
++#    define systemd_NR_fsmount 432
++#  elif defined(__m68k__)
++#    define systemd_NR_fsmount 432
++#  elif defined(_MIPS_SIM)
++#    if _MIPS_SIM == _MIPS_SIM_ABI32
++#      define systemd_NR_fsmount 4432
++#    elif _MIPS_SIM == _MIPS_SIM_NABI32
++#      define systemd_NR_fsmount 6432
++#    elif _MIPS_SIM == _MIPS_SIM_ABI64
++#      define systemd_NR_fsmount 5432
++#    else
++#      error "Unknown MIPS ABI"
++#    endif
++#  elif defined(__hppa__)
++#    define systemd_NR_fsmount 432
++#  elif defined(__powerpc__)
++#    define systemd_NR_fsmount 432
++#  elif defined(__riscv)
++#    if __riscv_xlen == 32
++#      define systemd_NR_fsmount 432
++#    elif __riscv_xlen == 64
++#      define systemd_NR_fsmount 432
++#    else
++#      error "Unknown RISC-V ABI"
++#    endif
++#  elif defined(__s390__)
++#    define systemd_NR_fsmount 432
++#  elif defined(__sh__)
++#    define systemd_NR_fsmount 432
++#  elif defined(__sparc__)
++#    define systemd_NR_fsmount 432
++#  elif defined(__x86_64__)
++#    if defined(__ILP32__)
++#      define systemd_NR_fsmount (432 | /* __X32_SYSCALL_BIT */ 0x40000000)
++#    else
++#      define systemd_NR_fsmount 432
++#    endif
++#  elif !defined(missing_arch_template)
++#    warning "fsmount() syscall number is unknown for your architecture"
++#  endif
++
++/* may be an (invalid) negative number due to libseccomp, see PR 13319 */
++#  if defined __NR_fsmount && __NR_fsmount >= 0
++#    if defined systemd_NR_fsmount
++static_assert(__NR_fsmount == systemd_NR_fsmount, "");
++#    endif
++#  else
++#    if defined __NR_fsmount
++#      undef __NR_fsmount
++#    endif
++#    if defined systemd_NR_fsmount && systemd_NR_fsmount >= 0
++#      define __NR_fsmount systemd_NR_fsmount
++#    endif
++#  endif
++#endif
++
++#ifndef __IGNORE_fsopen
++#  if defined(__aarch64__)
++#    define systemd_NR_fsopen 430
++#  elif defined(__alpha__)
++#    define systemd_NR_fsopen 540
++#  elif defined(__arc__) || defined(__tilegx__)
++#    define systemd_NR_fsopen 430
++#  elif defined(__arm__)
++#    define systemd_NR_fsopen 430
++#  elif defined(__i386__)
++#    define systemd_NR_fsopen 430
++#  elif defined(__ia64__)
++#    define systemd_NR_fsopen 1454
++#  elif defined(__loongarch_lp64)
++#    define systemd_NR_fsopen 430
++#  elif defined(__m68k__)
++#    define systemd_NR_fsopen 430
++#  elif defined(_MIPS_SIM)
++#    if _MIPS_SIM == _MIPS_SIM_ABI32
++#      define systemd_NR_fsopen 4430
++#    elif _MIPS_SIM == _MIPS_SIM_NABI32
++#      define systemd_NR_fsopen 6430
++#    elif _MIPS_SIM == _MIPS_SIM_ABI64
++#      define systemd_NR_fsopen 5430
++#    else
++#      error "Unknown MIPS ABI"
++#    endif
++#  elif defined(__hppa__)
++#    define systemd_NR_fsopen 430
++#  elif defined(__powerpc__)
++#    define systemd_NR_fsopen 430
++#  elif defined(__riscv)
++#    if __riscv_xlen == 32
++#      define systemd_NR_fsopen 430
++#    elif __riscv_xlen == 64
++#      define systemd_NR_fsopen 430
++#    else
++#      error "Unknown RISC-V ABI"
++#    endif
++#  elif defined(__s390__)
++#    define systemd_NR_fsopen 430
++#  elif defined(__sh__)
++#    define systemd_NR_fsopen 430
++#  elif defined(__sparc__)
++#    define systemd_NR_fsopen 430
++#  elif defined(__x86_64__)
++#    if defined(__ILP32__)
++#      define systemd_NR_fsopen (430 | /* __X32_SYSCALL_BIT */ 0x40000000)
++#    else
++#      define systemd_NR_fsopen 430
++#    endif
++#  elif !defined(missing_arch_template)
++#    warning "fsopen() syscall number is unknown for your architecture"
++#  endif
++
++/* may be an (invalid) negative number due to libseccomp, see PR 13319 */
++#  if defined __NR_fsopen && __NR_fsopen >= 0
++#    if defined systemd_NR_fsopen
++static_assert(__NR_fsopen == systemd_NR_fsopen, "");
++#    endif
++#  else
++#    if defined __NR_fsopen
++#      undef __NR_fsopen
++#    endif
++#    if defined systemd_NR_fsopen && systemd_NR_fsopen >= 0
++#      define __NR_fsopen systemd_NR_fsopen
++#    endif
++#  endif
++#endif
++
+ #ifndef __IGNORE_kexec_file_load
+ #  if defined(__aarch64__)
+ #    define systemd_NR_kexec_file_load 294
+@@ -194,6 +544,286 @@ static_assert(__NR_kexec_file_load == systemd_NR_kexec_file_load, "");
+ #  endif
+ #endif
+ 
++#ifndef __IGNORE_mount_setattr
++#  if defined(__aarch64__)
++#    define systemd_NR_mount_setattr 442
++#  elif defined(__alpha__)
++#    define systemd_NR_mount_setattr 552
++#  elif defined(__arc__) || defined(__tilegx__)
++#    define systemd_NR_mount_setattr 442
++#  elif defined(__arm__)
++#    define systemd_NR_mount_setattr 442
++#  elif defined(__i386__)
++#    define systemd_NR_mount_setattr 442
++#  elif defined(__ia64__)
++#    define systemd_NR_mount_setattr 1466
++#  elif defined(__loongarch_lp64)
++#    define systemd_NR_mount_setattr 442
++#  elif defined(__m68k__)
++#    define systemd_NR_mount_setattr 442
++#  elif defined(_MIPS_SIM)
++#    if _MIPS_SIM == _MIPS_SIM_ABI32
++#      define systemd_NR_mount_setattr 4442
++#    elif _MIPS_SIM == _MIPS_SIM_NABI32
++#      define systemd_NR_mount_setattr 6442
++#    elif _MIPS_SIM == _MIPS_SIM_ABI64
++#      define systemd_NR_mount_setattr 5442
++#    else
++#      error "Unknown MIPS ABI"
++#    endif
++#  elif defined(__hppa__)
++#    define systemd_NR_mount_setattr 442
++#  elif defined(__powerpc__)
++#    define systemd_NR_mount_setattr 442
++#  elif defined(__riscv)
++#    if __riscv_xlen == 32
++#      define systemd_NR_mount_setattr 442
++#    elif __riscv_xlen == 64
++#      define systemd_NR_mount_setattr 442
++#    else
++#      error "Unknown RISC-V ABI"
++#    endif
++#  elif defined(__s390__)
++#    define systemd_NR_mount_setattr 442
++#  elif defined(__sh__)
++#    define systemd_NR_mount_setattr 442
++#  elif defined(__sparc__)
++#    define systemd_NR_mount_setattr 442
++#  elif defined(__x86_64__)
++#    if defined(__ILP32__)
++#      define systemd_NR_mount_setattr (442 | /* __X32_SYSCALL_BIT */ 0x40000000)
++#    else
++#      define systemd_NR_mount_setattr 442
++#    endif
++#  elif !defined(missing_arch_template)
++#    warning "mount_setattr() syscall number is unknown for your architecture"
++#  endif
++
++/* may be an (invalid) negative number due to libseccomp, see PR 13319 */
++#  if defined __NR_mount_setattr && __NR_mount_setattr >= 0
++#    if defined systemd_NR_mount_setattr
++static_assert(__NR_mount_setattr == systemd_NR_mount_setattr, "");
++#    endif
++#  else
++#    if defined __NR_mount_setattr
++#      undef __NR_mount_setattr
++#    endif
++#    if defined systemd_NR_mount_setattr && systemd_NR_mount_setattr >= 0
++#      define __NR_mount_setattr systemd_NR_mount_setattr
++#    endif
++#  endif
++#endif
++
++#ifndef __IGNORE_move_mount
++#  if defined(__aarch64__)
++#    define systemd_NR_move_mount 429
++#  elif defined(__alpha__)
++#    define systemd_NR_move_mount 539
++#  elif defined(__arc__) || defined(__tilegx__)
++#    define systemd_NR_move_mount 429
++#  elif defined(__arm__)
++#    define systemd_NR_move_mount 429
++#  elif defined(__i386__)
++#    define systemd_NR_move_mount 429
++#  elif defined(__ia64__)
++#    define systemd_NR_move_mount 1453
++#  elif defined(__loongarch_lp64)
++#    define systemd_NR_move_mount 429
++#  elif defined(__m68k__)
++#    define systemd_NR_move_mount 429
++#  elif defined(_MIPS_SIM)
++#    if _MIPS_SIM == _MIPS_SIM_ABI32
++#      define systemd_NR_move_mount 4429
++#    elif _MIPS_SIM == _MIPS_SIM_NABI32
++#      define systemd_NR_move_mount 6429
++#    elif _MIPS_SIM == _MIPS_SIM_ABI64
++#      define systemd_NR_move_mount 5429
++#    else
++#      error "Unknown MIPS ABI"
++#    endif
++#  elif defined(__hppa__)
++#    define systemd_NR_move_mount 429
++#  elif defined(__powerpc__)
++#    define systemd_NR_move_mount 429
++#  elif defined(__riscv)
++#    if __riscv_xlen == 32
++#      define systemd_NR_move_mount 429
++#    elif __riscv_xlen == 64
++#      define systemd_NR_move_mount 429
++#    else
++#      error "Unknown RISC-V ABI"
++#    endif
++#  elif defined(__s390__)
++#    define systemd_NR_move_mount 429
++#  elif defined(__sh__)
++#    define systemd_NR_move_mount 429
++#  elif defined(__sparc__)
++#    define systemd_NR_move_mount 429
++#  elif defined(__x86_64__)
++#    if defined(__ILP32__)
++#      define systemd_NR_move_mount (429 | /* __X32_SYSCALL_BIT */ 0x40000000)
++#    else
++#      define systemd_NR_move_mount 429
++#    endif
++#  elif !defined(missing_arch_template)
++#    warning "move_mount() syscall number is unknown for your architecture"
++#  endif
++
++/* may be an (invalid) negative number due to libseccomp, see PR 13319 */
++#  if defined __NR_move_mount && __NR_move_mount >= 0
++#    if defined systemd_NR_move_mount
++static_assert(__NR_move_mount == systemd_NR_move_mount, "");
++#    endif
++#  else
++#    if defined __NR_move_mount
++#      undef __NR_move_mount
++#    endif
++#    if defined systemd_NR_move_mount && systemd_NR_move_mount >= 0
++#      define __NR_move_mount systemd_NR_move_mount
++#    endif
++#  endif
++#endif
++
++#ifndef __IGNORE_openat2
++#  if defined(__aarch64__)
++#    define systemd_NR_openat2 437
++#  elif defined(__alpha__)
++#    define systemd_NR_openat2 547
++#  elif defined(__arc__) || defined(__tilegx__)
++#    define systemd_NR_openat2 437
++#  elif defined(__arm__)
++#    define systemd_NR_openat2 437
++#  elif defined(__i386__)
++#    define systemd_NR_openat2 437
++#  elif defined(__ia64__)
++#    define systemd_NR_openat2 1461
++#  elif defined(__loongarch_lp64)
++#    define systemd_NR_openat2 437
++#  elif defined(__m68k__)
++#    define systemd_NR_openat2 437
++#  elif defined(_MIPS_SIM)
++#    if _MIPS_SIM == _MIPS_SIM_ABI32
++#      define systemd_NR_openat2 4437
++#    elif _MIPS_SIM == _MIPS_SIM_NABI32
++#      define systemd_NR_openat2 6437
++#    elif _MIPS_SIM == _MIPS_SIM_ABI64
++#      define systemd_NR_openat2 5437
++#    else
++#      error "Unknown MIPS ABI"
++#    endif
++#  elif defined(__hppa__)
++#    define systemd_NR_openat2 437
++#  elif defined(__powerpc__)
++#    define systemd_NR_openat2 437
++#  elif defined(__riscv)
++#    if __riscv_xlen == 32
++#      define systemd_NR_openat2 437
++#    elif __riscv_xlen == 64
++#      define systemd_NR_openat2 437
++#    else
++#      error "Unknown RISC-V ABI"
++#    endif
++#  elif defined(__s390__)
++#    define systemd_NR_openat2 437
++#  elif defined(__sh__)
++#    define systemd_NR_openat2 437
++#  elif defined(__sparc__)
++#    define systemd_NR_openat2 437
++#  elif defined(__x86_64__)
++#    if defined(__ILP32__)
++#      define systemd_NR_openat2 (437 | /* __X32_SYSCALL_BIT */ 0x40000000)
++#    else
++#      define systemd_NR_openat2 437
++#    endif
++#  elif !defined(missing_arch_template)
++#    warning "openat2() syscall number is unknown for your architecture"
++#  endif
++
++/* may be an (invalid) negative number due to libseccomp, see PR 13319 */
++#  if defined __NR_openat2 && __NR_openat2 >= 0
++#    if defined systemd_NR_openat2
++static_assert(__NR_openat2 == systemd_NR_openat2, "");
++#    endif
++#  else
++#    if defined __NR_openat2
++#      undef __NR_openat2
++#    endif
++#    if defined systemd_NR_openat2 && systemd_NR_openat2 >= 0
++#      define __NR_openat2 systemd_NR_openat2
++#    endif
++#  endif
++#endif
++
++#ifndef __IGNORE_open_tree
++#  if defined(__aarch64__)
++#    define systemd_NR_open_tree 428
++#  elif defined(__alpha__)
++#    define systemd_NR_open_tree 538
++#  elif defined(__arc__) || defined(__tilegx__)
++#    define systemd_NR_open_tree 428
++#  elif defined(__arm__)
++#    define systemd_NR_open_tree 428
++#  elif defined(__i386__)
++#    define systemd_NR_open_tree 428
++#  elif defined(__ia64__)
++#    define systemd_NR_open_tree 1452
++#  elif defined(__loongarch_lp64)
++#    define systemd_NR_open_tree 428
++#  elif defined(__m68k__)
++#    define systemd_NR_open_tree 428
++#  elif defined(_MIPS_SIM)
++#    if _MIPS_SIM == _MIPS_SIM_ABI32
++#      define systemd_NR_open_tree 4428
++#    elif _MIPS_SIM == _MIPS_SIM_NABI32
++#      define systemd_NR_open_tree 6428
++#    elif _MIPS_SIM == _MIPS_SIM_ABI64
++#      define systemd_NR_open_tree 5428
++#    else
++#      error "Unknown MIPS ABI"
++#    endif
++#  elif defined(__hppa__)
++#    define systemd_NR_open_tree 428
++#  elif defined(__powerpc__)
++#    define systemd_NR_open_tree 428
++#  elif defined(__riscv)
++#    if __riscv_xlen == 32
++#      define systemd_NR_open_tree 428
++#    elif __riscv_xlen == 64
++#      define systemd_NR_open_tree 428
++#    else
++#      error "Unknown RISC-V ABI"
++#    endif
++#  elif defined(__s390__)
++#    define systemd_NR_open_tree 428
++#  elif defined(__sh__)
++#    define systemd_NR_open_tree 428
++#  elif defined(__sparc__)
++#    define systemd_NR_open_tree 428
++#  elif defined(__x86_64__)
++#    if defined(__ILP32__)
++#      define systemd_NR_open_tree (428 | /* __X32_SYSCALL_BIT */ 0x40000000)
++#    else
++#      define systemd_NR_open_tree 428
++#    endif
++#  elif !defined(missing_arch_template)
++#    warning "open_tree() syscall number is unknown for your architecture"
++#  endif
++
++/* may be an (invalid) negative number due to libseccomp, see PR 13319 */
++#  if defined __NR_open_tree && __NR_open_tree >= 0
++#    if defined systemd_NR_open_tree
++static_assert(__NR_open_tree == systemd_NR_open_tree, "");
++#    endif
++#  else
++#    if defined __NR_open_tree
++#      undef __NR_open_tree
++#    endif
++#    if defined systemd_NR_open_tree && systemd_NR_open_tree >= 0
++#      define __NR_open_tree systemd_NR_open_tree
++#    endif
++#  endif
++#endif
++
+ #ifndef __IGNORE_open_tree_attr
+ #  if defined(__aarch64__)
+ #    define systemd_NR_open_tree_attr 467
+@@ -264,6 +894,146 @@ static_assert(__NR_open_tree_attr == systemd_NR_open_tree_attr, "");
+ #  endif
+ #endif
+ 
++#ifndef __IGNORE_pidfd_open
++#  if defined(__aarch64__)
++#    define systemd_NR_pidfd_open 434
++#  elif defined(__alpha__)
++#    define systemd_NR_pidfd_open 544
++#  elif defined(__arc__) || defined(__tilegx__)
++#    define systemd_NR_pidfd_open 434
++#  elif defined(__arm__)
++#    define systemd_NR_pidfd_open 434
++#  elif defined(__i386__)
++#    define systemd_NR_pidfd_open 434
++#  elif defined(__ia64__)
++#    define systemd_NR_pidfd_open 1458
++#  elif defined(__loongarch_lp64)
++#    define systemd_NR_pidfd_open 434
++#  elif defined(__m68k__)
++#    define systemd_NR_pidfd_open 434
++#  elif defined(_MIPS_SIM)
++#    if _MIPS_SIM == _MIPS_SIM_ABI32
++#      define systemd_NR_pidfd_open 4434
++#    elif _MIPS_SIM == _MIPS_SIM_NABI32
++#      define systemd_NR_pidfd_open 6434
++#    elif _MIPS_SIM == _MIPS_SIM_ABI64
++#      define systemd_NR_pidfd_open 5434
++#    else
++#      error "Unknown MIPS ABI"
++#    endif
++#  elif defined(__hppa__)
++#    define systemd_NR_pidfd_open 434
++#  elif defined(__powerpc__)
++#    define systemd_NR_pidfd_open 434
++#  elif defined(__riscv)
++#    if __riscv_xlen == 32
++#      define systemd_NR_pidfd_open 434
++#    elif __riscv_xlen == 64
++#      define systemd_NR_pidfd_open 434
++#    else
++#      error "Unknown RISC-V ABI"
++#    endif
++#  elif defined(__s390__)
++#    define systemd_NR_pidfd_open 434
++#  elif defined(__sh__)
++#    define systemd_NR_pidfd_open 434
++#  elif defined(__sparc__)
++#    define systemd_NR_pidfd_open 434
++#  elif defined(__x86_64__)
++#    if defined(__ILP32__)
++#      define systemd_NR_pidfd_open (434 | /* __X32_SYSCALL_BIT */ 0x40000000)
++#    else
++#      define systemd_NR_pidfd_open 434
++#    endif
++#  elif !defined(missing_arch_template)
++#    warning "pidfd_open() syscall number is unknown for your architecture"
++#  endif
++
++/* may be an (invalid) negative number due to libseccomp, see PR 13319 */
++#  if defined __NR_pidfd_open && __NR_pidfd_open >= 0
++#    if defined systemd_NR_pidfd_open
++static_assert(__NR_pidfd_open == systemd_NR_pidfd_open, "");
++#    endif
++#  else
++#    if defined __NR_pidfd_open
++#      undef __NR_pidfd_open
++#    endif
++#    if defined systemd_NR_pidfd_open && systemd_NR_pidfd_open >= 0
++#      define __NR_pidfd_open systemd_NR_pidfd_open
++#    endif
++#  endif
++#endif
++
++#ifndef __IGNORE_pidfd_send_signal
++#  if defined(__aarch64__)
++#    define systemd_NR_pidfd_send_signal 424
++#  elif defined(__alpha__)
++#    define systemd_NR_pidfd_send_signal 534
++#  elif defined(__arc__) || defined(__tilegx__)
++#    define systemd_NR_pidfd_send_signal 424
++#  elif defined(__arm__)
++#    define systemd_NR_pidfd_send_signal 424
++#  elif defined(__i386__)
++#    define systemd_NR_pidfd_send_signal 424
++#  elif defined(__ia64__)
++#    define systemd_NR_pidfd_send_signal 1448
++#  elif defined(__loongarch_lp64)
++#    define systemd_NR_pidfd_send_signal 424
++#  elif defined(__m68k__)
++#    define systemd_NR_pidfd_send_signal 424
++#  elif defined(_MIPS_SIM)
++#    if _MIPS_SIM == _MIPS_SIM_ABI32
++#      define systemd_NR_pidfd_send_signal 4424
++#    elif _MIPS_SIM == _MIPS_SIM_NABI32
++#      define systemd_NR_pidfd_send_signal 6424
++#    elif _MIPS_SIM == _MIPS_SIM_ABI64
++#      define systemd_NR_pidfd_send_signal 5424
++#    else
++#      error "Unknown MIPS ABI"
++#    endif
++#  elif defined(__hppa__)
++#    define systemd_NR_pidfd_send_signal 424
++#  elif defined(__powerpc__)
++#    define systemd_NR_pidfd_send_signal 424
++#  elif defined(__riscv)
++#    if __riscv_xlen == 32
++#      define systemd_NR_pidfd_send_signal 424
++#    elif __riscv_xlen == 64
++#      define systemd_NR_pidfd_send_signal 424
++#    else
++#      error "Unknown RISC-V ABI"
++#    endif
++#  elif defined(__s390__)
++#    define systemd_NR_pidfd_send_signal 424
++#  elif defined(__sh__)
++#    define systemd_NR_pidfd_send_signal 424
++#  elif defined(__sparc__)
++#    define systemd_NR_pidfd_send_signal 424
++#  elif defined(__x86_64__)
++#    if defined(__ILP32__)
++#      define systemd_NR_pidfd_send_signal (424 | /* __X32_SYSCALL_BIT */ 0x40000000)
++#    else
++#      define systemd_NR_pidfd_send_signal 424
++#    endif
++#  elif !defined(missing_arch_template)
++#    warning "pidfd_send_signal() syscall number is unknown for your architecture"
++#  endif
++
++/* may be an (invalid) negative number due to libseccomp, see PR 13319 */
++#  if defined __NR_pidfd_send_signal && __NR_pidfd_send_signal >= 0
++#    if defined systemd_NR_pidfd_send_signal
++static_assert(__NR_pidfd_send_signal == systemd_NR_pidfd_send_signal, "");
++#    endif
++#  else
++#    if defined __NR_pidfd_send_signal
++#      undef __NR_pidfd_send_signal
++#    endif
++#    if defined systemd_NR_pidfd_send_signal && systemd_NR_pidfd_send_signal >= 0
++#      define __NR_pidfd_send_signal systemd_NR_pidfd_send_signal
++#    endif
++#  endif
++#endif
++
+ #ifndef __IGNORE_quotactl_fd
+ #  if defined(__aarch64__)
+ #    define systemd_NR_quotactl_fd 443
+@@ -473,3 +1243,73 @@ static_assert(__NR_setxattrat == systemd_NR_setxattrat, "");
+ #    endif
+ #  endif
+ #endif
++
++#ifndef __IGNORE_statx
++#  if defined(__aarch64__)
++#    define systemd_NR_statx 291
++#  elif defined(__alpha__)
++#    define systemd_NR_statx 522
++#  elif defined(__arc__) || defined(__tilegx__)
++#    define systemd_NR_statx 291
++#  elif defined(__arm__)
++#    define systemd_NR_statx 397
++#  elif defined(__i386__)
++#    define systemd_NR_statx 383
++#  elif defined(__ia64__)
++#    define systemd_NR_statx 1350
++#  elif defined(__loongarch_lp64)
++#    define systemd_NR_statx 291
++#  elif defined(__m68k__)
++#    define systemd_NR_statx 379
++#  elif defined(_MIPS_SIM)
++#    if _MIPS_SIM == _MIPS_SIM_ABI32
++#      define systemd_NR_statx 4366
++#    elif _MIPS_SIM == _MIPS_SIM_NABI32
++#      define systemd_NR_statx 6330
++#    elif _MIPS_SIM == _MIPS_SIM_ABI64
++#      define systemd_NR_statx 5326
++#    else
++#      error "Unknown MIPS ABI"
++#    endif
++#  elif defined(__hppa__)
++#    define systemd_NR_statx 349
++#  elif defined(__powerpc__)
++#    define systemd_NR_statx 383
++#  elif defined(__riscv)
++#    if __riscv_xlen == 32
++#      define systemd_NR_statx 291
++#    elif __riscv_xlen == 64
++#      define systemd_NR_statx 291
++#    else
++#      error "Unknown RISC-V ABI"
++#    endif
++#  elif defined(__s390__)
++#    define systemd_NR_statx 379
++#  elif defined(__sh__)
++#    define systemd_NR_statx 383
++#  elif defined(__sparc__)
++#    define systemd_NR_statx 360
++#  elif defined(__x86_64__)
++#    if defined(__ILP32__)
++#      define systemd_NR_statx (332 | /* __X32_SYSCALL_BIT */ 0x40000000)
++#    else
++#      define systemd_NR_statx 332
++#    endif
++#  elif !defined(missing_arch_template)
++#    warning "statx() syscall number is unknown for your architecture"
++#  endif
++
++/* may be an (invalid) negative number due to libseccomp, see PR 13319 */
++#  if defined __NR_statx && __NR_statx >= 0
++#    if defined systemd_NR_statx
++static_assert(__NR_statx == systemd_NR_statx, "");
++#    endif
++#  else
++#    if defined __NR_statx
++#      undef __NR_statx
++#    endif
++#    if defined systemd_NR_statx && systemd_NR_statx >= 0
++#      define __NR_statx systemd_NR_statx
++#    endif
++#  endif
++#endif

@@ -1,0 +1,469 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mark Harfouche <mark.harfouche@gmail.com>
+Date: Thu, 3 Sep 2026 21:52:41 -0400
+Subject: [PATCH] glibc: back-fill interfaces added after glibc 2.17
+
+systemd documents glibc >= 2.34 as its baseline. Distributions that build
+against an older sysroot to keep their binaries running on old systems --
+conda-forge's sysroot 2.17 among them -- have no way to satisfy that, even
+though every interface involved is either a plain syscall or trivially
+implementable.
+
+Add wrappers under src/include/glibc/ for the ones we actually use, each
+guarded by GLIBC_OLDER_THAN() from the new <glibc-compat.h> so the whole
+thing compiles away on any glibc that already has them, and on musl. That
+helper sits in src/include/override/ rather than next to its users because
+src/include/glibc/ is only on the include path for glibc builds, while
+errno-list.c below needs the check for either libc.
+
+  <unistd.h>     copy_file_range (2.27), gettid (2.30),
+                 close_range, execveat (2.34)
+  <dirent.h>     getdents64 (2.30)
+  <stdio.h>      renameat2 (2.28)
+  <stdlib.h>     reallocarray (2.26)
+  <string.h>     explicit_bzero (2.25)
+  <malloc.h>     struct mallinfo2, mallinfo2 (2.33)
+  <threads.h>    thread_local (2.28)
+  <sys/mman.h>   memfd_create and the MFD_* flags (2.27)
+  <sys/random.h> the header itself, getrandom (2.25), GRND_INSECURE (2.32)
+  <sys/stat.h>   struct statx, the STATX_* masks, statx (2.28)
+
+The syscall-backed ones go through DEFINE_SYSCALL_SHIM(), so a binary built
+against old headers still calls the libc symbol when it happens to run on a
+newer glibc and only falls back to syscall() otherwise. gettid() is spelled
+out because the macro's argument counting cannot express a niladic syscall.
+
+'statx' and 'mallinfo2' also name structs, so those two redirect through
+function-like macros -- an object-like one would rewrite 'struct statx' into
+'struct statx_shim'.
+
+Finally, errno_name_no_fallback() now requires glibc 2.32 for
+strerrorname_np() and otherwise uses the generated table that non-glibc
+libcs already fall back to.
+---
+ src/basic/errno-list.c              |   4 +-
+ src/include/glibc/dirent.h          |  13 +++
+ src/include/glibc/malloc.h          |  28 ++++++
+ src/include/glibc/string.h          |  12 +++
+ src/include/glibc/sys/mman.h        |  16 ++++
+ src/include/glibc/sys/random.h      |  26 ++++++
+ src/include/glibc/sys/stat.h        |  19 ++++
+ src/include/glibc/threads.h         |  14 +++
+ src/include/glibc/unistd.h          |  28 ++++++
+ src/include/override/glibc-compat.h |  20 +++++
+ src/libc/glibc-compat.c             | 130 ++++++++++++++++++++++++++++
+ src/libc/meson.build                |   4 +
+ 12 files changed, 313 insertions(+), 1 deletion(-)
+ create mode 100644 src/include/glibc/dirent.h
+ create mode 100644 src/include/glibc/malloc.h
+ create mode 100644 src/include/glibc/string.h
+ create mode 100644 src/include/glibc/sys/mman.h
+ create mode 100644 src/include/glibc/sys/random.h
+ create mode 100644 src/include/glibc/sys/stat.h
+ create mode 100644 src/include/glibc/threads.h
+ create mode 100644 src/include/glibc/unistd.h
+ create mode 100644 src/include/override/glibc-compat.h
+ create mode 100644 src/libc/glibc-compat.c
+
+diff --git a/src/basic/errno-list.c b/src/basic/errno-list.c
+index b6662bf..27fc276 100644
+--- a/src/basic/errno-list.c
++++ b/src/basic/errno-list.c
+@@ -1,5 +1,6 @@
+ /* SPDX-License-Identifier: LGPL-2.1-or-later */
+ 
++#include <glibc-compat.h>
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <string.h>
+@@ -24,7 +25,8 @@ int errno_from_name(const char *name) {
+         return sc->id;
+ }
+ 
+-#ifdef __GLIBC__
++/* strerrorname_np() is defined since glibc-2.32; older glibc uses the generated table below. */
++#if defined(__GLIBC__) && !GLIBC_OLDER_THAN(2, 32)
+ const char* errno_name_no_fallback(int id) {
+         if (id == 0) /* To stay in line with our implementation below.  */
+                 return NULL;
+diff --git a/src/include/glibc/dirent.h b/src/include/glibc/dirent.h
+new file mode 100644
+index 0000000..76cbecd
+--- /dev/null
++++ b/src/include/glibc/dirent.h
+@@ -0,0 +1,13 @@
++/* SPDX-License-Identifier: LGPL-2.1-or-later */
++#pragma once
++
++#include <glibc-compat.h>
++#include <sys/types.h>
++
++#include_next <dirent.h>        /* IWYU pragma: export */
++
++#if GLIBC_OLDER_THAN(2, 30)
++/* Defined since glibc-2.30. */
++ssize_t getdents64_shim(int fd, void *buffer, size_t length);
++#define getdents64 getdents64_shim
++#endif
+diff --git a/src/include/glibc/malloc.h b/src/include/glibc/malloc.h
+new file mode 100644
+index 0000000..c557eb3
+--- /dev/null
++++ b/src/include/glibc/malloc.h
+@@ -0,0 +1,28 @@
++/* SPDX-License-Identifier: LGPL-2.1-or-later */
++#pragma once
++
++#include <glibc-compat.h>
++
++#include_next <malloc.h>        /* IWYU pragma: export */
++
++#if GLIBC_OLDER_THAN(2, 33)
++/* struct mallinfo2 and mallinfo2() are defined since glibc-2.33. They are the size_t-based variant
++ * of the older int-based struct mallinfo, which is all older glibc has to offer. */
++struct mallinfo2 {
++        size_t arena;
++        size_t ordblks;
++        size_t smblks;
++        size_t hblks;
++        size_t hblkhd;
++        size_t usmblks;
++        size_t fsmblks;
++        size_t uordblks;
++        size_t fordblks;
++        size_t keepcost;
++};
++
++struct mallinfo2 mallinfo2_shim(void);
++/* Function-like on purpose: 'mallinfo2' also names the struct above, and an object-like macro
++ * would rewrite every 'struct mallinfo2' into 'struct mallinfo2_shim'. */
++#define mallinfo2() mallinfo2_shim()
++#endif
+diff --git a/src/include/glibc/string.h b/src/include/glibc/string.h
+new file mode 100644
+index 0000000..24d82de
+--- /dev/null
++++ b/src/include/glibc/string.h
+@@ -0,0 +1,12 @@
++/* SPDX-License-Identifier: LGPL-2.1-or-later */
++#pragma once
++
++#include <glibc-compat.h>
++
++#include_next <string.h>        /* IWYU pragma: export */
++
++#if GLIBC_OLDER_THAN(2, 25)
++/* Defined since glibc-2.25. */
++void explicit_bzero_shim(void *p, size_t l);
++#define explicit_bzero explicit_bzero_shim
++#endif
+diff --git a/src/include/glibc/sys/mman.h b/src/include/glibc/sys/mman.h
+new file mode 100644
+index 0000000..a360d92
+--- /dev/null
++++ b/src/include/glibc/sys/mman.h
+@@ -0,0 +1,16 @@
++/* SPDX-License-Identifier: LGPL-2.1-or-later */
++#pragma once
++
++#include <glibc-compat.h>
++
++#include_next <sys/mman.h>      /* IWYU pragma: export */
++
++#if GLIBC_OLDER_THAN(2, 27)
++/* glibc re-exports the MFD_* flags from <sys/mman.h> only since 2.27; take them straight from the
++ * kernel header instead. */
++#include <linux/memfd.h>        /* IWYU pragma: export */
++
++/* Defined since glibc-2.27. Supported since kernel v3.17 (9183df25fe7b194563db3fec6dc3202a5855839c). */
++int memfd_create_shim(const char *name, unsigned flags);
++#define memfd_create memfd_create_shim
++#endif
+diff --git a/src/include/glibc/sys/random.h b/src/include/glibc/sys/random.h
+new file mode 100644
+index 0000000..e557b9e
+--- /dev/null
++++ b/src/include/glibc/sys/random.h
+@@ -0,0 +1,26 @@
++/* SPDX-License-Identifier: LGPL-2.1-or-later */
++#pragma once
++
++#include <glibc-compat.h>
++
++/* glibc grew <sys/random.h> in 2.25 -- on anything older there is no header to chain to, and the
++ * GRND_* flags have to come from the kernel header instead. */
++#if GLIBC_OLDER_THAN(2, 25)
++
++#include <linux/random.h>       /* IWYU pragma: export */
++#include <stddef.h>
++#include <sys/types.h>
++
++/* Defined since glibc-2.25. Supported since kernel v3.17 (c6e9d6f38894798696f23c8084ca7edbf16ee895). */
++ssize_t getrandom_shim(void *buffer, size_t length, unsigned flags);
++#define getrandom getrandom_shim
++
++#else
++#include_next <sys/random.h>    /* IWYU pragma: export */
++#endif
++
++/* linux@75551dbf112c992bc6c99a972990b3f272247e23 (5.6),
++ * defined in sys/random.h since glibc-2.32. */
++#ifndef GRND_INSECURE
++#define GRND_INSECURE 0x0004
++#endif
+diff --git a/src/include/glibc/sys/stat.h b/src/include/glibc/sys/stat.h
+new file mode 100644
+index 0000000..33b28ba
+--- /dev/null
++++ b/src/include/glibc/sys/stat.h
+@@ -0,0 +1,19 @@
++/* SPDX-License-Identifier: LGPL-2.1-or-later */
++#pragma once
++
++#include <glibc-compat.h>
++
++#include_next <sys/stat.h>      /* IWYU pragma: export */
++
++#if GLIBC_OLDER_THAN(2, 28)
++/* glibc's <sys/stat.h> only pulls in <linux/stat.h> (and with it struct statx and the STATX_*
++ * masks) since 2.28. The kernel header guards its S_* macros for glibc, so including it after
++ * <sys/stat.h> is safe. */
++#include <linux/stat.h>         /* IWYU pragma: export */
++
++/* Defined since glibc-2.28. Supported since kernel v4.11 (a528d35e8bfcc521d7cb70aaf03e1bd296c8493f). */
++int statx_shim(int dirfd, const char *pathname, int flags, unsigned mask, struct statx *statxbuf);
++/* Function-like on purpose: 'statx' also names the struct above, and an object-like macro would
++ * rewrite every 'struct statx' into 'struct statx_shim'. */
++#define statx(dirfd, pathname, flags, mask, statxbuf) statx_shim(dirfd, pathname, flags, mask, statxbuf)
++#endif
+diff --git a/src/include/glibc/threads.h b/src/include/glibc/threads.h
+new file mode 100644
+index 0000000..033672e
+--- /dev/null
++++ b/src/include/glibc/threads.h
+@@ -0,0 +1,14 @@
++/* SPDX-License-Identifier: LGPL-2.1-or-later */
++#pragma once
++
++#include <glibc-compat.h>
++
++#if GLIBC_OLDER_THAN(2, 28)
++/* glibc only ships C11's <threads.h> since 2.28. The single thing systemd wants from it is
++ * thread_local, which every compiler we support spells _Thread_local natively. */
++#ifndef thread_local
++#define thread_local _Thread_local
++#endif
++#else
++#include_next <threads.h>       /* IWYU pragma: export */
++#endif
+diff --git a/src/include/glibc/unistd.h b/src/include/glibc/unistd.h
+new file mode 100644
+index 0000000..fe3e059
+--- /dev/null
++++ b/src/include/glibc/unistd.h
+@@ -0,0 +1,28 @@
++/* SPDX-License-Identifier: LGPL-2.1-or-later */
++#pragma once
++
++#include <glibc-compat.h>
++
++#include_next <unistd.h>        /* IWYU pragma: export */
++
++#if GLIBC_OLDER_THAN(2, 27)
++/* Defined since glibc-2.27. Supported since kernel v4.5 (29732938a6289a15e907da234d6692a2ead71855). */
++ssize_t copy_file_range_shim(int fd_in, __off64_t *off_in, int fd_out, __off64_t *off_out, size_t len, unsigned flags);
++#define copy_file_range copy_file_range_shim
++#endif
++
++#if GLIBC_OLDER_THAN(2, 30)
++/* Defined since glibc-2.30. */
++pid_t gettid_shim(void);
++#define gettid gettid_shim
++#endif
++
++#if GLIBC_OLDER_THAN(2, 34)
++/* Defined since glibc-2.34. Supported since kernel v5.9 (278a5fbaed89dacd04e9d052f4594ffd0e0585de). */
++int close_range_shim(unsigned first_fd, unsigned end_fd, unsigned flags);
++#define close_range close_range_shim
++
++/* Defined since glibc-2.34. Supported since kernel v3.19 (51f39a1f0cea1cacf8c787f652f26dfee9611874). */
++int execveat_shim(int dirfd, const char *pathname, char * const argv[], char * const envp[], int flags);
++#define execveat execveat_shim
++#endif
+diff --git a/src/include/override/glibc-compat.h b/src/include/override/glibc-compat.h
+new file mode 100644
+index 0000000..010674f
+--- /dev/null
++++ b/src/include/override/glibc-compat.h
+@@ -0,0 +1,20 @@
++/* SPDX-License-Identifier: LGPL-2.1-or-later */
++#pragma once
++
++/* Helper for the wrappers under src/include/glibc/ that back-fill interfaces which glibc only grew
++ * after the oldest release we still build against. It lives here rather than next to them because
++ * src/include/glibc/ is only on the include path for glibc builds, while a few shared sources need
++ * the check too. Each user guards its additions with
++ *
++ *      #if GLIBC_OLDER_THAN(2, 28)
++ *
++ * which evaluates to 0 on musl and on glibc new enough to declare the interface itself, so the
++ * wrappers are a no-op for every reasonably modern toolchain. */
++
++#include <features.h>
++
++#if defined __GLIBC__ && defined __GLIBC_PREREQ
++#  define GLIBC_OLDER_THAN(major, minor) (!__GLIBC_PREREQ(major, minor))
++#else
++#  define GLIBC_OLDER_THAN(major, minor) 0
++#endif
+diff --git a/src/libc/glibc-compat.c b/src/libc/glibc-compat.c
+new file mode 100644
+index 0000000..cb8d1e7
+--- /dev/null
++++ b/src/libc/glibc-compat.c
+@@ -0,0 +1,130 @@
++/* SPDX-License-Identifier: LGPL-2.1-or-later */
++
++/* Back-fill for interfaces that glibc only grew after the oldest release systemd is still built
++ * against. The declarations live in src/include/glibc/, which redirects each name to the _shim
++ * variant defined here. Everything is compiled out when glibc is new enough, so this file is empty
++ * for any reasonably modern toolchain.
++ *
++ * Syscall-backed entries use DEFINE_SYSCALL_SHIM, i.e. they call the libc symbol when the glibc we
++ * are *running* against provides one and fall back to the raw syscall otherwise. That matters for
++ * binaries built against old headers but deployed on a modern system. */
++
++#include <glibc-compat.h>
++
++#include <dirent.h>
++#include <errno.h>
++#include <malloc.h>
++#include <stdint.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <sys/mman.h>
++#include <sys/random.h>
++#include <sys/stat.h>
++#include <sys/types.h>
++#include <unistd.h>
++
++#include "libc-shim.h"
++
++#if GLIBC_OLDER_THAN(2, 25)
++DEFINE_SYSCALL_SHIM(getrandom, ssize_t,
++                    void *, buffer,
++                    size_t, length,
++                    unsigned, flags)
++
++void explicit_bzero_shim(void *p, size_t l) {
++        memset(p, 0, l);
++        /* Keep the compiler from optimizing the store away: pretend the memory is read by an
++         * (empty) asm block that may look at anything. */
++        __asm__ volatile("" : : "r"(p) : "memory");
++}
++#endif
++
++#if GLIBC_OLDER_THAN(2, 26)
++void* reallocarray_shim(void *ptr, size_t nmemb, size_t size) {
++        if (size != 0 && nmemb > SIZE_MAX / size) {
++                errno = ENOMEM;
++                return NULL;
++        }
++
++        return realloc(ptr, nmemb * size);
++}
++#endif
++
++#if GLIBC_OLDER_THAN(2, 27)
++DEFINE_SYSCALL_SHIM(copy_file_range, ssize_t,
++                    int, fd_in,
++                    __off64_t *, off_in,
++                    int, fd_out,
++                    __off64_t *, off_out,
++                    size_t, len,
++                    unsigned, flags)
++
++DEFINE_SYSCALL_SHIM(memfd_create, int,
++                    const char *, name,
++                    unsigned, flags)
++#endif
++
++#if GLIBC_OLDER_THAN(2, 28)
++DEFINE_SYSCALL_SHIM(renameat2, int,
++                    int, olddirfd,
++                    const char *, oldpath,
++                    int, newdirfd,
++                    const char *, newpath,
++                    unsigned, flags)
++
++DEFINE_SYSCALL_SHIM(statx, int,
++                    int, dirfd,
++                    const char *, pathname,
++                    int, flags,
++                    unsigned, mask,
++                    struct statx *, statxbuf)
++#endif
++
++#if GLIBC_OLDER_THAN(2, 30)
++/* Spelled out rather than DEFINE_SYSCALL_SHIM()'d: the macro's argument counting cannot express a
++ * syscall that takes no arguments at all. */
++pid_t gettid_shim(void) {
++        return (pid_t) syscall(__NR_gettid);
++}
++
++DEFINE_SYSCALL_SHIM(getdents64, ssize_t,
++                    int, fd,
++                    void *, buffer,
++                    size_t, length)
++#endif
++
++#if GLIBC_OLDER_THAN(2, 33)
++struct mallinfo2 mallinfo2_shim(void) {
++        /* No syscall to fall back to, and no way to reach a newer glibc's mallinfo2() without
++         * a matching struct definition, so widen what the old int-based mallinfo() reports. */
++        struct mallinfo mi = mallinfo();
++
++        return (struct mallinfo2) {
++                .arena    = (size_t) (unsigned) mi.arena,
++                .ordblks  = (size_t) (unsigned) mi.ordblks,
++                .smblks   = (size_t) (unsigned) mi.smblks,
++                .hblks    = (size_t) (unsigned) mi.hblks,
++                .hblkhd   = (size_t) (unsigned) mi.hblkhd,
++                .usmblks  = (size_t) (unsigned) mi.usmblks,
++                .fsmblks  = (size_t) (unsigned) mi.fsmblks,
++                .uordblks = (size_t) (unsigned) mi.uordblks,
++                .fordblks = (size_t) (unsigned) mi.fordblks,
++                .keepcost = (size_t) (unsigned) mi.keepcost,
++        };
++}
++#endif
++
++#if GLIBC_OLDER_THAN(2, 34)
++DEFINE_SYSCALL_SHIM(close_range, int,
++                    unsigned, first_fd,
++                    unsigned, end_fd,
++                    unsigned, flags)
++
++DEFINE_SYSCALL_SHIM(execveat, int,
++                    int, dirfd,
++                    const char *, pathname,
++                    char * const *, argv,
++                    char * const *, envp,
++                    int, flags)
++#endif
+diff --git a/src/libc/meson.build b/src/libc/meson.build
+index 9b86168..66852c4 100644
+--- a/src/libc/meson.build
++++ b/src/libc/meson.build
+@@ -20,6 +20,10 @@ libc_wrapper_sources = files(
+         'xattr.c',
+ )
+ 
++if get_option('libc') == 'glibc'
++        libc_wrapper_sources += files('glibc-compat.c')
++endif
++
+ subdir('musl')
+ 
+ sources += libc_wrapper_sources

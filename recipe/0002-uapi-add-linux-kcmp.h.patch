@@ -1,0 +1,62 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mark Harfouche <mark.harfouche@gmail.com>
+Date: Thu, 3 Sep 2026 21:48:12 -0400
+Subject: [PATCH] uapi: add linux/kcmp.h
+
+<sys/kcmp.h> includes it for enum kcmp_type, but not every distribution's
+kernel-headers package exports it -- the CentOS 7 one behind conda-forge's
+sysroot 2.17 does not, even though the syscall itself dates back to v3.5.
+Vendor it like the other UAPI headers we carry.
+---
+ src/include/override/sys/kcmp.h |  2 ++
+ src/include/uapi/linux/kcmp.h   | 28 ++++++++++++++++++++++++++++
+ 2 files changed, 30 insertions(+)
+ create mode 100644 src/include/uapi/linux/kcmp.h
+
+diff --git a/src/include/override/sys/kcmp.h b/src/include/override/sys/kcmp.h
+index f0df5d4..db52f03 100644
+--- a/src/include/override/sys/kcmp.h
++++ b/src/include/override/sys/kcmp.h
+@@ -1,6 +1,8 @@
+ /* SPDX-License-Identifier: LGPL-2.1-or-later */
+ #pragma once
+ 
++/* Not every distribution's kernel-headers package exports this one, so we carry a copy of it
++ * under src/include/uapi/. */
+ #include <linux/kcmp.h>         /* IWYU pragma: export */
+ #include <sys/types.h>
+ 
+diff --git a/src/include/uapi/linux/kcmp.h b/src/include/uapi/linux/kcmp.h
+new file mode 100644
+index 0000000..ef13050
+--- /dev/null
++++ b/src/include/uapi/linux/kcmp.h
+@@ -0,0 +1,28 @@
++/* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */
++#ifndef _UAPI_LINUX_KCMP_H
++#define _UAPI_LINUX_KCMP_H
++
++#include <linux/types.h>
++
++/* Comparison type */
++enum kcmp_type {
++	KCMP_FILE,
++	KCMP_VM,
++	KCMP_FILES,
++	KCMP_FS,
++	KCMP_SIGHAND,
++	KCMP_IO,
++	KCMP_SYSVSEM,
++	KCMP_EPOLL_TFD,
++
++	KCMP_TYPES,
++};
++
++/* Slot for KCMP_EPOLL_TFD */
++struct kcmp_epoll_slot {
++	__u32 efd;		/* epoll file descriptor */
++	__u32 tfd;		/* target file number */
++	__u32 toff;		/* target offset within same numbered sequence */
++};
++
++#endif /* _UAPI_LINUX_KCMP_H */

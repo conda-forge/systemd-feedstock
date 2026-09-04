@@ -1,0 +1,65 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mark Harfouche <mark.harfouche@gmail.com>
+Date: Thu, 3 Sep 2026 21:49:48 -0400
+Subject: [PATCH] sched: order linux/sched/types.h against sched.h by glibc
+ version
+
+glibc spells struct sched_param's only member __sched_priority and defines
+'sched_priority' as a macro for it. struct sched_attr, which we pull in from
+<linux/sched/types.h>, happens to have a member of that name too -- so
+declaring the struct before <sched.h> while compiling every *use* of the
+member after it leaves the two spellings out of sync:
+
+  src/core/exec-invoke.c:5593: error: 'struct sched_attr' has no member
+      named '__sched_priority'; did you mean 'sched_priority'?
+
+Include the kernel header last there and let the macro rewrite declaration
+and uses alike. Current glibc keeps the macro but expands it to itself, so
+either order works and we keep the existing one -- which glibc >= 2.41 needs
+anyway, since its <sched.h> includes <linux/sched/types.h> on its own.
+---
+ src/include/override/sched.h | 29 ++++++++++++++++++++++++++---
+ 1 file changed, 26 insertions(+), 3 deletions(-)
+
+diff --git a/src/include/override/sched.h b/src/include/override/sched.h
+index 3eed393..0c12362 100644
+--- a/src/include/override/sched.h
++++ b/src/include/override/sched.h
+@@ -3,11 +3,34 @@
+ 
+ /* sched.h includes linux/sched/types.h since glibc-2.41 (21571ca0d70302909cf72707b2a7736cf12190a0),
+  * to make struct sched_attr being defined.
+- * Note, this must be included before sched.h, otherwise the headers conflict with each other. */
++ * Note, this must be included before sched.h, otherwise the headers conflict with each other.
++ *
++ * Older glibc wants the opposite order though: there <sched.h> defines 'sched_priority' as a macro
++ * expanding to __sched_priority, the real name of struct sched_param's only member. struct
++ * sched_attr happens to have a member of that name too, so declaring it before the macro is in
++ * scope while compiling every *use* of the member after would leave the two spellings out of sync.
++ * Pulling the kernel header in last instead lets the macro rewrite declaration and uses alike.
++ * (Current glibc still defines the macro, but as a no-op expanding to itself, so either order
++ * works there and we keep upstream's.) */
++#include <features.h>
++
++#define SD_SCHED_TYPES_BEFORE_SCHED_H 1
++#ifdef __GLIBC__
++#  if !__GLIBC_PREREQ(2, 41)
++#    undef SD_SCHED_TYPES_BEFORE_SCHED_H
++#    define SD_SCHED_TYPES_BEFORE_SCHED_H 0
++#  endif
++#endif
++
+ #include <linux/sched.h>        /* IWYU pragma: export */
+-#include <linux/sched/types.h>  /* IWYU pragma: export */
+ 
+-#include_next <sched.h>         /* IWYU pragma: export */
++#if SD_SCHED_TYPES_BEFORE_SCHED_H
++#  include <linux/sched/types.h>  /* IWYU pragma: export */
++#  include_next <sched.h>         /* IWYU pragma: export */
++#else
++#  include_next <sched.h>         /* IWYU pragma: export */
++#  include <linux/sched/types.h>  /* IWYU pragma: export */
++#endif
+ 
+ #include <assert.h>
+ 

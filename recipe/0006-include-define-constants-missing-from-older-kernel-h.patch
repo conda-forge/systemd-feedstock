@@ -1,0 +1,324 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mark Harfouche <mark.harfouche@gmail.com>
+Date: Thu, 3 Sep 2026 21:50:03 -0400
+Subject: [PATCH] include: define constants missing from older kernel headers
+ and glibc
+
+Same pattern as the definitions already living in these wrappers, just
+reaching further back. Needed to build against the kernel 3.10 UAPI headers
+and glibc 2.17 that conda-forge's sysroot 2.17 ships:
+
+  fcntl.h        F_ADD_SEALS, F_GET_SEALS,
+                 F_SEAL_{SEAL,SHRINK,GROW,WRITE},
+                 AT_STATX_{SYNC_TYPE,SYNC_AS_STAT,FORCE_SYNC,DONT_SYNC},
+                 AT_RECURSIVE
+  signal.h       ILL_BADIADDR, FPE_{FLTUNK,CONDTRAP},
+                 BUS_MCEERR_{AR,AO}, TRAP_{BRANCH,HWBKPT,UNK},
+                 SEGV_{BNDERR,PKUERR,ACCADI,ADIDERR,ADIPERR,MTEAERR,MTESERR}
+  sched.h        CLONE_NEWCGROUP, CLONE_PIDFD
+  sys/mman.h     MCL_ONFAULT
+  sys/socket.h   SO_COOKIE, SO_PEERGROUPS, SO_BINDTOIFINDEX, SOL_NETLINK
+  sys/quota.h    PRJQUOTA
+  linux/audit.h  AUDIT_NLGRP_READLOG
+  sys/ioctl.h    TIOCGPTPEER (new wrapper)
+  sys/timerfd.h  TFD_TIMER_CANCEL_ON_SET (new wrapper)
+
+MCL_ONFAULT is spelled relative to MCL_FUTURE because the absolute values
+differ per architecture (1/2/4 on most, 0x2000/0x4000/0x8000 on alpha,
+parisc, powerpc and sparc) while that relation holds everywhere.
+
+AUDIT_NLGRP_READLOG is an enum constant rather than a macro, so #ifndef
+cannot see it and we may define a macro of the same name on top of the
+already declared enum. That is harmless, and the static_assert() beside it
+holds either way.
+---
+ src/include/override/fcntl.h       | 42 ++++++++++++++++++++++
+ src/include/override/linux/audit.h |  9 +++++
+ src/include/override/sched.h       | 16 +++++++++
+ src/include/override/signal.h      | 56 ++++++++++++++++++++++++++++++
+ src/include/override/sys/ioctl.h   | 13 +++++++
+ src/include/override/sys/mman.h    | 10 ++++++
+ src/include/override/sys/quota.h   |  6 ++++
+ src/include/override/sys/socket.h  | 24 +++++++++++++
+ src/include/override/sys/timerfd.h | 10 ++++++
+ 9 files changed, 186 insertions(+)
+ create mode 100644 src/include/override/sys/ioctl.h
+ create mode 100644 src/include/override/sys/timerfd.h
+
+diff --git a/src/include/override/fcntl.h b/src/include/override/fcntl.h
+index bf42009..2d9049d 100644
+--- a/src/include/override/fcntl.h
++++ b/src/include/override/fcntl.h
+@@ -10,6 +10,48 @@
+ #define F_DUPFD_QUERY 1027
+ #endif
+ 
++/* File sealing, defined by glibc since 2.20 in <bits/fcntl-linux.h>.
++ * f17d8b35452cab31a70d224964cd583fb2845449 (3.17) */
++#ifndef F_ADD_SEALS
++#define F_ADD_SEALS     1033    /* F_LINUX_SPECIFIC_BASE + 9 */
++#endif
++#ifndef F_GET_SEALS
++#define F_GET_SEALS     1034    /* F_LINUX_SPECIFIC_BASE + 10 */
++#endif
++#ifndef F_SEAL_SEAL
++#define F_SEAL_SEAL     0x0001  /* prevent further seals from being set */
++#endif
++#ifndef F_SEAL_SHRINK
++#define F_SEAL_SHRINK   0x0002  /* prevent file from shrinking */
++#endif
++#ifndef F_SEAL_GROW
++#define F_SEAL_GROW     0x0004  /* prevent file from growing */
++#endif
++#ifndef F_SEAL_WRITE
++#define F_SEAL_WRITE    0x0008  /* prevent writes */
++#endif
++
++/* Supported since kernel v5.2 (2db154b3ea8e14b04fee23e3fdfd5e9d17fbc6ae).
++ * Defined since glibc-2.36. */
++#ifndef AT_RECURSIVE
++#define AT_RECURSIVE    0x8000  /* Apply to the entire subtree */
++#endif
++
++/* statx() sync flags, defined by glibc since 2.28.
++ * a528d35e8bfcc521d7cb70aaf03e1bd296c8493f (4.11) */
++#ifndef AT_STATX_SYNC_TYPE
++#define AT_STATX_SYNC_TYPE      0x6000  /* Type of synchronisation required from statx() */
++#endif
++#ifndef AT_STATX_SYNC_AS_STAT
++#define AT_STATX_SYNC_AS_STAT   0x0000  /* - Do whatever stat() does */
++#endif
++#ifndef AT_STATX_FORCE_SYNC
++#define AT_STATX_FORCE_SYNC     0x2000  /* - Force the attributes to be sync'd with the server */
++#endif
++#ifndef AT_STATX_DONT_SYNC
++#define AT_STATX_DONT_SYNC      0x4000  /* - Don't sync attributes with the server */
++#endif
++
+ /* This is defined since glibc-2.39. */
+ #ifndef F_SEAL_EXEC
+ #define F_SEAL_EXEC     0x0020  /* prevent chmod modifying exec bits */
+diff --git a/src/include/override/linux/audit.h b/src/include/override/linux/audit.h
+index abdd25b..616d73e 100644
+--- a/src/include/override/linux/audit.h
++++ b/src/include/override/linux/audit.h
+@@ -14,6 +14,15 @@
+  * of generate-audit_type-list.sh becomes more complex.
+  */
+ 
++/* AUDIT_NLGRP_READLOG is an enum constant rather than a macro (kernel v3.16,
++ * 451f931790badc4d0d9b2f195bb2f2f1e1665e26), so #ifndef cannot see it and we may end up defining a
++ * macro of the same name on top of the already declared enum. That is harmless, and the assertion
++ * below holds either way. */
++#ifndef AUDIT_NLGRP_READLOG
++#  define AUDIT_NLGRP_READLOG 1 /* "best effort" read only socket */
++#endif
++static_assert(AUDIT_NLGRP_READLOG == 1, "");
++
+ #ifndef AUDIT_SERVICE_START
+ #  define AUDIT_SERVICE_START 1130 /* Service (daemon) start */
+ #else
+diff --git a/src/include/override/sched.h b/src/include/override/sched.h
+index 0c12362..d7a775c 100644
+--- a/src/include/override/sched.h
++++ b/src/include/override/sched.h
+@@ -34,6 +34,22 @@
+ 
+ #include <assert.h>
+ 
++/* b3e5838252665ee4cfa76b82bdf1198dca81e5be (5.2),
++ * defined in sched.h since glibc-2.30. */
++#ifndef CLONE_PIDFD
++#  define CLONE_PIDFD 0x00001000
++#else
++static_assert(CLONE_PIDFD == 0x00001000, "");
++#endif
++
++/* a79a908fd2b0812a5e8fd3d1ac0c86c4d3a12b78 (4.6),
++ * defined in sched.h since glibc-2.24. */
++#ifndef CLONE_NEWCGROUP
++#  define CLONE_NEWCGROUP 0x02000000
++#else
++static_assert(CLONE_NEWCGROUP == 0x02000000, "");
++#endif
++
+ /* 769071ac9f20b6a447410c7eaa55d1a5233ef40c (5.8),
+  * defined in sched.h since glibc-2.36. */
+ #ifndef CLONE_NEWTIME
+diff --git a/src/include/override/signal.h b/src/include/override/signal.h
+index 9cca48b..b7f1689 100644
+--- a/src/include/override/signal.h
++++ b/src/include/override/signal.h
+@@ -9,11 +9,67 @@
+ #if defined _SIGNAL_H && !defined SD_OVERRIDE_SIGNAL_H
+ #define SD_OVERRIDE_SIGNAL_H
+ 
++/* si_code values for SIGILL. Defined since glibc-2.27. */
++#ifndef ILL_BADIADDR
++#define ILL_BADIADDR 9
++#endif
++
++/* si_code values for SIGFPE. Defined since glibc-2.27. */
++#ifndef FPE_FLTUNK
++#define FPE_FLTUNK 14
++#endif
++#ifndef FPE_CONDTRAP
++#define FPE_CONDTRAP 15
++#endif
++
++/* si_code values for SIGSEGV. Defined since glibc-2.20 (BNDERR), 2.27 (PKUERR, ACCADI, ADIDERR,
++ * ADIPERR), 2.33 (MTEAERR, MTESERR) and 2.39 (CPERR) respectively. */
++#ifndef SEGV_BNDERR
++#define SEGV_BNDERR 3
++#endif
++#ifndef SEGV_PKUERR
++#define SEGV_PKUERR 4
++#endif
++#ifndef SEGV_ACCADI
++#define SEGV_ACCADI 5
++#endif
++#ifndef SEGV_ADIDERR
++#define SEGV_ADIDERR 6
++#endif
++#ifndef SEGV_ADIPERR
++#define SEGV_ADIPERR 7
++#endif
++#ifndef SEGV_MTEAERR
++#define SEGV_MTEAERR 8
++#endif
++#ifndef SEGV_MTESERR
++#define SEGV_MTESERR 9
++#endif
++
+ /* Defined since glibc-2.39. */
+ #ifndef SEGV_CPERR
+ #define SEGV_CPERR 10
+ #endif
+ 
++/* si_code values for SIGBUS. Defined since glibc-2.18. */
++#ifndef BUS_MCEERR_AR
++#define BUS_MCEERR_AR 4
++#endif
++#ifndef BUS_MCEERR_AO
++#define BUS_MCEERR_AO 5
++#endif
++
++/* si_code values for SIGTRAP. Defined since glibc-2.27. */
++#ifndef TRAP_BRANCH
++#define TRAP_BRANCH 3
++#endif
++#ifndef TRAP_HWBKPT
++#define TRAP_HWBKPT 4
++#endif
++#ifndef TRAP_UNK
++#define TRAP_UNK 5
++#endif
++
+ #ifndef SI_DETHREAD
+ #define SI_DETHREAD -7
+ #endif
+diff --git a/src/include/override/sys/ioctl.h b/src/include/override/sys/ioctl.h
+new file mode 100644
+index 0000000..a1fa847
+--- /dev/null
++++ b/src/include/override/sys/ioctl.h
+@@ -0,0 +1,13 @@
++/* SPDX-License-Identifier: LGPL-2.1-or-later */
++#pragma once
++
++#include_next <sys/ioctl.h>     /* IWYU pragma: export */
++
++#include <assert.h>
++
++/* c6325179238f1d4683edbec53d8322575d76d7e2 (4.13) */
++#ifndef TIOCGPTPEER
++#  define TIOCGPTPEER _IO('T', 0x41)
++#else
++static_assert(TIOCGPTPEER == _IO('T', 0x41), "");
++#endif
+diff --git a/src/include/override/sys/mman.h b/src/include/override/sys/mman.h
+index 9961ea4..50db3fc 100644
+--- a/src/include/override/sys/mman.h
++++ b/src/include/override/sys/mman.h
+@@ -5,6 +5,16 @@
+ 
+ #include <assert.h>
+ 
++/* since Linux 4.4 (a8ca5d0ecbdde5cc3d7accacbd69968b0c98764e) / glibc-2.23.
++ * Spelled relative to MCL_FUTURE because the absolute values differ per architecture (1/2/4 pretty
++ * much everywhere, 0x2000/0x4000/0x8000 on alpha, parisc, powerpc and sparc), while the
++ * "twice MCL_FUTURE" relation holds on all of them. */
++#ifndef MCL_ONFAULT
++#  define MCL_ONFAULT (MCL_FUTURE * 2)
++#else
++static_assert(MCL_ONFAULT == MCL_FUTURE * 2, "");
++#endif
++
+ /* since glibc-2.38 */
+ #ifndef MFD_NOEXEC_SEAL
+ #  define MFD_NOEXEC_SEAL 0x0008U
+diff --git a/src/include/override/sys/quota.h b/src/include/override/sys/quota.h
+index 95aa367..e71c014 100644
+--- a/src/include/override/sys/quota.h
++++ b/src/include/override/sys/quota.h
+@@ -3,6 +3,12 @@
+ 
+ #include_next <sys/quota.h>     /* IWYU pragma: export */
+ 
++/* Project quotas, supported by the kernel since v4.1 (847aac644e92e5624f2c153bb32d1ab7e39a2532).
++ * Defined since glibc-2.24. */
++#ifndef PRJQUOTA
++#define PRJQUOTA 2
++#endif
++
+ /* Supported since kernel v5.14 (64c2c2c62f92339b176ea24403d8db16db36f9e6). */
+ int quotactl_fd_shim(int fd, int cmd, int id, void *addr);
+ #define quotactl_fd quotactl_fd_shim
+diff --git a/src/include/override/sys/socket.h b/src/include/override/sys/socket.h
+index 25e9ad7..63bde58 100644
+--- a/src/include/override/sys/socket.h
++++ b/src/include/override/sys/socket.h
+@@ -41,3 +41,27 @@
+ #ifndef SCM_MAX_FD
+ #define SCM_MAX_FD 253U
+ #endif
++
++/* Supported since kernel v4.13 (0a978a013ec8dc0ef99a0bf29d3a1d2be0b95bf3).
++ * Defined since glibc-2.26. */
++#ifndef SO_COOKIE
++#define SO_COOKIE 57
++#endif
++
++/* Supported since kernel v4.13 (28b5ba2aa0f55d80adb2624564ed2b170c19519e).
++ * Defined since glibc-2.26. */
++#ifndef SO_PEERGROUPS
++#define SO_PEERGROUPS 59
++#endif
++
++/* Supported since kernel v5.1 (f5dd3d0c9638a9d9a02b5964c4ad636f06cf7e2c).
++ * Defined since glibc-2.30. */
++#ifndef SO_BINDTOIFINDEX
++#define SO_BINDTOIFINDEX 62
++#endif
++
++/* Supported since kernel v2.6.14 (9a4595bc7e67962f13232ee55a64e063062c3a99).
++ * Defined since glibc-2.24. */
++#ifndef SOL_NETLINK
++#define SOL_NETLINK 270
++#endif
+diff --git a/src/include/override/sys/timerfd.h b/src/include/override/sys/timerfd.h
+new file mode 100644
+index 0000000..eaeee0b
+--- /dev/null
++++ b/src/include/override/sys/timerfd.h
+@@ -0,0 +1,10 @@
++/* SPDX-License-Identifier: LGPL-2.1-or-later */
++#pragma once
++
++#include_next <sys/timerfd.h>   /* IWYU pragma: export */
++
++/* Supported since kernel v2.6.28 (7d9dbca39f181c3ca206c060871ca141a02e1cd8).
++ * Defined since glibc-2.23. */
++#ifndef TFD_TIMER_CANCEL_ON_SET
++#define TFD_TIMER_CANCEL_ON_SET (1 << 1)
++#endif
