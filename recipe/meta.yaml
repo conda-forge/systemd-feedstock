@@ -203,3 +203,6 @@ extra:
   feedstock-name: {{ name }}
   recipe-maintainers:
     - ryanvolz
+    # hmaarrfk is interested in helping maintain the backward compatibility patches
+    # for stdlib_c
+    - hmaarrfk
