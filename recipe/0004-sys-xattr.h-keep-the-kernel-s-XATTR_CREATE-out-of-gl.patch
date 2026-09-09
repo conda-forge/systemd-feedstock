@@ -1,0 +1,43 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mark Harfouche <mark.harfouche@gmail.com>
+Date: Thu, 3 Sep 2026 21:49:48 -0400
+Subject: [PATCH] sys/xattr.h: keep the kernel's XATTR_CREATE out of glibc's
+ enum
+
+We include <linux/xattr.h> first so struct xattr_args is defined. That
+header also defines XATTR_CREATE and XATTR_REPLACE as macros, and glibc only
+learned to notice (via __USE_KERNEL_XATTR_DEFS) and skip its own enum
+declaration of the same names in 2.21. On anything older the macros get
+substituted into the enum, which does not compile:
+
+  sys/xattr.h:31:3: error: expected identifier before numeric constant
+
+Undefine them before chaining and let glibc declare them again -- to the
+very same values.
+---
+ src/include/override/sys/xattr.h | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/src/include/override/sys/xattr.h b/src/include/override/sys/xattr.h
+index 8823548..f060396 100644
+--- a/src/include/override/sys/xattr.h
++++ b/src/include/override/sys/xattr.h
+@@ -5,6 +5,18 @@
+  * included before the glibc header, otherwise the struct will not be defined. */
+ #include <linux/xattr.h>        /* IWYU pragma: export */
+ 
++/* glibc only learned to skip its own XATTR_CREATE/XATTR_REPLACE enum when the kernel header got
++ * there first (__USE_KERNEL_XATTR_DEFS) in 2.21. On older glibc the macros defined by the include
++ * above get substituted into that enum declaration, which does not compile. Drop them and let
++ * glibc define them again -- to the very same values. */
++#include <features.h>
++#if defined __GLIBC__
++#  if !__GLIBC_PREREQ(2, 21)
++#    undef XATTR_CREATE
++#    undef XATTR_REPLACE
++#  endif
++#endif
++
+ #include_next <sys/xattr.h>     /* IWYU pragma: export */
+ 
+ /* Supported since kernel v6.13 (6140be90ec70c39fa844741ca3cc807dd0866394). */

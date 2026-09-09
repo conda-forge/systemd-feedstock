@@ -1,0 +1,135 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mark Harfouche <mark.harfouche@gmail.com>
+Date: Thu, 3 Sep 2026 21:49:27 -0400
+Subject: [PATCH] include: survive glibc's __need_* partial include protocol
+
+Older glibc lets a header ask for just one type out of another header by
+setting a __need_* macro first: <grp.h> does it to <stdio.h> for FILE,
+<wchar.h> to <stdlib.h> for malloc/calloc, and <spawn.h> to <signal.h> for
+sigset_t. Such an include defines neither the header's own guard nor
+anything else, and the header is expected to be re-enterable so that a
+later full include still works.
+
+Our wrappers are marked '#pragma once', so they get consumed by the partial
+include and the subsequent full one is silently skipped -- leaving printf(),
+alloca() and, in <signal.h>'s case, siginfo_t undeclared:
+
+  src/include/override/signal.h:29:60: error: unknown type name 'siginfo_t'
+  src/basic/alloc-util.h:25:17: error: implicit declaration of function 'alloca'
+
+Drop the pragma from the three wrappers reachable this way and gate what
+must happen exactly once on the underlying header's own guard instead.
+
+Newer glibc has retired the protocol, so this is a no-op there.
+---
+ src/include/glibc/stdio.h     | 21 +++++++++++++++++++--
+ src/include/glibc/stdlib.h    | 21 +++++++++++++++++++--
+ src/include/override/signal.h | 10 +++++++++-
+ 3 files changed, 47 insertions(+), 5 deletions(-)
+
+diff --git a/src/include/glibc/stdio.h b/src/include/glibc/stdio.h
+index 7e45cb3..9ce519c 100644
+--- a/src/include/glibc/stdio.h
++++ b/src/include/glibc/stdio.h
+@@ -1,5 +1,9 @@
+ /* SPDX-License-Identifier: LGPL-2.1-or-later */
+-#pragma once
++
++/* Deliberately no '#pragma once': glibc <= 2.25 uses the __need_FILE protocol to pull a partial
++ * <stdio.h> out of <grp.h>. If this wrapper were processed only once, the partial include would
++ * consume it and the subsequent full <stdio.h> would be skipped, leaving printf() & friends
++ * undeclared. Everything below is idempotent, so re-entering the file is harmless. */
+ 
+ /* Force glibc's stdio.h to route sscanf/fscanf to the old __isoc99_* siblings (GLIBC_2.7) rather
+  * than the newer __isoc23_* ones (GLIBC_2.38). The only behavioural difference is "0b" prefix
+@@ -9,10 +13,23 @@
+  * The macro was named __GLIBC_USE_C2X_STRTOL on glibc 2.38–2.39 and renamed to the C23 spelling
+  * in glibc 2.40; clear both so this override works across that range. */
+ 
+-#include <features.h>
++#include <glibc-compat.h>
++
+ #undef __GLIBC_USE_C2X_STRTOL
+ #define __GLIBC_USE_C2X_STRTOL 0
+ #undef __GLIBC_USE_C23_STRTOL
+ #define __GLIBC_USE_C23_STRTOL 0
+ 
+ #include_next <stdio.h>      /* IWYU pragma: export */
++
++/* Only once, and only once <stdio.h> has actually been pulled in completely. */
++#if defined _STDIO_H && !defined SD_GLIBC_STDIO_H
++#define SD_GLIBC_STDIO_H
++
++#if GLIBC_OLDER_THAN(2, 28)
++/* Defined since glibc-2.28. Supported since kernel v3.15 (520c8b16505236fc82daa352e6c5e73cd9870cff). */
++int renameat2_shim(int olddirfd, const char *oldpath, int newdirfd, const char *newpath, unsigned flags);
++#define renameat2 renameat2_shim
++#endif
++
++#endif
+diff --git a/src/include/glibc/stdlib.h b/src/include/glibc/stdlib.h
+index a3ad2a3..2dc39ab 100644
+--- a/src/include/glibc/stdlib.h
++++ b/src/include/glibc/stdlib.h
+@@ -1,5 +1,9 @@
+ /* SPDX-License-Identifier: LGPL-2.1-or-later */
+-#pragma once
++
++/* Deliberately no '#pragma once': glibc uses the __need_malloc_and_calloc protocol to pull a
++ * partial <stdlib.h> out of <wchar.h>. If this wrapper were processed only once, that partial
++ * include would consume it and the subsequent full <stdlib.h> would be skipped, leaving alloca()
++ * & friends undeclared. Everything below is idempotent, so re-entering the file is harmless. */
+ 
+ /* Force glibc's stdlib.h to leave strtol/strtoul/strtoll/strtoull as their original GLIBC_2.2.5
+  * symbols rather than redirect to __isoc23_* (GLIBC_2.38). The only behavioural difference is
+@@ -8,10 +12,23 @@
+  * The macro was named __GLIBC_USE_C2X_STRTOL on glibc 2.38–2.39 and renamed to the C23 spelling
+  * in glibc 2.40; clear both so this override works across that range. */
+ 
+-#include <features.h>
++#include <glibc-compat.h>
++
+ #undef __GLIBC_USE_C2X_STRTOL
+ #define __GLIBC_USE_C2X_STRTOL 0
+ #undef __GLIBC_USE_C23_STRTOL
+ #define __GLIBC_USE_C23_STRTOL 0
+ 
+ #include_next <stdlib.h>     /* IWYU pragma: export */
++
++/* Only once, and only once <stdlib.h> has actually been pulled in completely. */
++#if defined _STDLIB_H && !defined SD_GLIBC_STDLIB_H
++#define SD_GLIBC_STDLIB_H
++
++#if GLIBC_OLDER_THAN(2, 26)
++/* Defined since glibc-2.26. */
++void* reallocarray_shim(void *ptr, size_t nmemb, size_t size);
++#define reallocarray reallocarray_shim
++#endif
++
++#endif
+diff --git a/src/include/override/signal.h b/src/include/override/signal.h
+index b6a6a9c..9cca48b 100644
+--- a/src/include/override/signal.h
++++ b/src/include/override/signal.h
+@@ -1,8 +1,14 @@
+ /* SPDX-License-Identifier: LGPL-2.1-or-later */
+-#pragma once
++
++/* Deliberately no '#pragma once': glibc <= 2.25 uses the __need_sigset_t protocol to pull a partial
++ * <signal.h> out of <spawn.h>. Such an include defines neither _SIGNAL_H nor siginfo_t, so we must
++ * stay re-enterable and defer our additions until the header is included in full. */
+ 
+ #include_next <signal.h>        /* IWYU pragma: export */
+ 
++#if defined _SIGNAL_H && !defined SD_OVERRIDE_SIGNAL_H
++#define SD_OVERRIDE_SIGNAL_H
++
+ /* Defined since glibc-2.39. */
+ #ifndef SEGV_CPERR
+ #define SEGV_CPERR 10
+@@ -28,3 +34,5 @@
+ 
+ int rt_tgsigqueueinfo_shim(pid_t tgid, pid_t tid, int sig, siginfo_t *info);
+ #define rt_tgsigqueueinfo rt_tgsigqueueinfo_shim
++
++#endif

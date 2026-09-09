@@ -1,0 +1,51 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mark Harfouche <mark.harfouche@gmail.com>
+Date: Thu, 3 Sep 2026 21:52:41 -0400
+Subject: [PATCH] meson: link libdl, libpthread and librt when glibc predates
+ 2.34
+
+glibc 2.34 moved these libraries' contents into libc proper, and we stopped
+linking against them accordingly. Against an older glibc that leaves every
+shared object and executable short of dlopen(), pthread_create(), mq_unlink()
+and friends at link time.
+
+Probe for each symbol in libc and only add the separate library when it is
+missing, so nothing changes for glibc >= 2.34 or musl. The result is added to
+the 'userspace' dependency, which every target already pulls in.
+---
+ meson.build | 15 +++++++++++++++
+ 1 file changed, 15 insertions(+)
+
+diff --git a/meson.build b/meson.build
+index 438ce4f..9c40d1f 100644
+--- a/meson.build
++++ b/meson.build
+@@ -1008,6 +1008,20 @@ endif
+ 
+ libm = cc.find_library('m')
+ 
++# glibc moved the contents of libdl, libpthread and librt into libc proper in 2.34, and systemd
++# relies on that by not linking against them at all. When building against an older glibc those
++# symbols still live in their own libraries, so look them up and add them to the 'userspace'
++# dependency below, which every target pulls in. On glibc >= 2.34 and on musl all three checks
++# succeed and nothing is added.
++libc_compat_deps = []
++foreach tuple : [['dl', 'dlopen'],
++                 ['pthread', 'pthread_create'],
++                 ['rt', 'mq_unlink']]
++        if not cc.has_function(tuple[1])
++                libc_compat_deps += cc.find_library(tuple[0], required : true)
++        endif
++endforeach
++
+ # Header presence check only — dgettext itself is resolved via dlopen_libintl() at runtime, so we never
+ # link against libintl. On glibc dgettext lives in libc; on musl gettext-dev provides libintl.h alongside
+ # libintl.so.8 which we dlopen() if present.
+@@ -1696,6 +1710,7 @@ jinja2_cmdline = [meson_render_jinja2_py, config_h]
+ userspace = declare_dependency(
+         compile_args : userspace_c_args,
+         link_args : userspace_c_ld_args,
++        dependencies : libc_compat_deps,
+         sources : userspace_sources,
+ )
+ 
