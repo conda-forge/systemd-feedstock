@@ -20,6 +20,7 @@ source:
     - 0006-include-define-constants-missing-from-older-kernel-h.patch
     - 0007-glibc-back-fill-interfaces-added-after-glibc-2.17.patch
     - 0008-meson-link-libdl-libpthread-and-librt-when-glibc-pre.patch
+    - 0009-libc-build-epoll_pwait2-shim-against-pre-5.1-kernel-.patch
 
 build:
   number: {{ build }}

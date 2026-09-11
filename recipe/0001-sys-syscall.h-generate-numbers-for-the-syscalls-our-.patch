@@ -15,19 +15,20 @@ which the glibc compat wrappers need -- to the generator's list and
 regenerate. The emitted blocks static_assert() against the kernel header
 whenever it does define the number, so this stays self-checking.
 ---
- src/include/override/sys/generate-syscall.py |  12 +
- src/include/override/sys/syscall.h           | 840 +++++++++++++++++++
- 2 files changed, 852 insertions(+)
+ src/include/override/sys/generate-syscall.py |   13 +
+ src/include/override/sys/syscall.h           | 1024 +++++++++++++++++-
+ 2 files changed, 980 insertions(+), 57 deletions(-)
 
 diff --git a/src/include/override/sys/generate-syscall.py b/src/include/override/sys/generate-syscall.py
-index ba44c93..5084ec7 100755
+index ba44c93..dcfffa0 100755
 --- a/src/include/override/sys/generate-syscall.py
 +++ b/src/include/override/sys/generate-syscall.py
-@@ -6,12 +6,24 @@ import sys
+@@ -6,12 +6,25 @@ import sys
  
  # We only generate numbers for a dozen or so syscalls
  SYSCALLS = [
 +    'close_range',   # defined in glibc header since glibc-2.34
++    'epoll_pwait2',  # defined in glibc header since glibc-2.35
 +    'execveat',      # defined in glibc header since glibc-2.34
      'fchmodat2',     # defined in glibc header since glibc-2.39
 +    'fsconfig',
@@ -49,10 +50,10 @@ index ba44c93..5084ec7 100755
  
  
 diff --git a/src/include/override/sys/syscall.h b/src/include/override/sys/syscall.h
-index da555e7..529696b 100644
+index da555e7..bb09ca2 100644
 --- a/src/include/override/sys/syscall.h
 +++ b/src/include/override/sys/syscall.h
-@@ -54,6 +54,146 @@
+@@ -54,142 +54,842 @@
  #    define missing_arch_template 1
  #  endif
  
@@ -122,6 +123,76 @@ index da555e7..529696b 100644
 +#    endif
 +#    if defined systemd_NR_close_range && systemd_NR_close_range >= 0
 +#      define __NR_close_range systemd_NR_close_range
++#    endif
++#  endif
++#endif
++
++#ifndef __IGNORE_epoll_pwait2
++#  if defined(__aarch64__)
++#    define systemd_NR_epoll_pwait2 441
++#  elif defined(__alpha__)
++#    define systemd_NR_epoll_pwait2 551
++#  elif defined(__arc__) || defined(__tilegx__)
++#    define systemd_NR_epoll_pwait2 441
++#  elif defined(__arm__)
++#    define systemd_NR_epoll_pwait2 441
++#  elif defined(__i386__)
++#    define systemd_NR_epoll_pwait2 441
++#  elif defined(__ia64__)
++#    define systemd_NR_epoll_pwait2 1465
++#  elif defined(__loongarch_lp64)
++#    define systemd_NR_epoll_pwait2 441
++#  elif defined(__m68k__)
++#    define systemd_NR_epoll_pwait2 441
++#  elif defined(_MIPS_SIM)
++#    if _MIPS_SIM == _MIPS_SIM_ABI32
++#      define systemd_NR_epoll_pwait2 4441
++#    elif _MIPS_SIM == _MIPS_SIM_NABI32
++#      define systemd_NR_epoll_pwait2 6441
++#    elif _MIPS_SIM == _MIPS_SIM_ABI64
++#      define systemd_NR_epoll_pwait2 5441
++#    else
++#      error "Unknown MIPS ABI"
++#    endif
++#  elif defined(__hppa__)
++#    define systemd_NR_epoll_pwait2 441
++#  elif defined(__powerpc__)
++#    define systemd_NR_epoll_pwait2 441
++#  elif defined(__riscv)
++#    if __riscv_xlen == 32
++#      define systemd_NR_epoll_pwait2 441
++#    elif __riscv_xlen == 64
++#      define systemd_NR_epoll_pwait2 441
++#    else
++#      error "Unknown RISC-V ABI"
++#    endif
++#  elif defined(__s390__)
++#    define systemd_NR_epoll_pwait2 441
++#  elif defined(__sh__)
++#    define systemd_NR_epoll_pwait2 441
++#  elif defined(__sparc__)
++#    define systemd_NR_epoll_pwait2 441
++#  elif defined(__x86_64__)
++#    if defined(__ILP32__)
++#      define systemd_NR_epoll_pwait2 (441 | /* __X32_SYSCALL_BIT */ 0x40000000)
++#    else
++#      define systemd_NR_epoll_pwait2 441
++#    endif
++#  elif !defined(missing_arch_template)
++#    warning "epoll_pwait2() syscall number is unknown for your architecture"
++#  endif
++
++/* may be an (invalid) negative number due to libseccomp, see PR 13319 */
++#  if defined __NR_epoll_pwait2 && __NR_epoll_pwait2 >= 0
++#    if defined systemd_NR_epoll_pwait2
++static_assert(__NR_epoll_pwait2 == systemd_NR_epoll_pwait2, "");
++#    endif
++#  else
++#    if defined __NR_epoll_pwait2
++#      undef __NR_epoll_pwait2
++#    endif
++#    if defined systemd_NR_epoll_pwait2 && systemd_NR_epoll_pwait2 >= 0
++#      define __NR_epoll_pwait2 systemd_NR_epoll_pwait2
 +#    endif
 +#  endif
 +#endif
@@ -198,11 +269,75 @@ index da555e7..529696b 100644
 +
  #ifndef __IGNORE_fchmodat2
  #  if defined(__aarch64__)
- #    define systemd_NR_fchmodat2 452
-@@ -124,6 +264,216 @@ static_assert(__NR_fchmodat2 == systemd_NR_fchmodat2, "");
- #  endif
- #endif
- 
+-#    define systemd_NR_fchmodat2 452
++#    define systemd_NR_fchmodat2 452
++#  elif defined(__alpha__)
++#    define systemd_NR_fchmodat2 562
++#  elif defined(__arc__) || defined(__tilegx__)
++#    define systemd_NR_fchmodat2 452
++#  elif defined(__arm__)
++#    define systemd_NR_fchmodat2 452
++#  elif defined(__i386__)
++#    define systemd_NR_fchmodat2 452
++#  elif defined(__ia64__)
++#    define systemd_NR_fchmodat2 1476
++#  elif defined(__loongarch_lp64)
++#    define systemd_NR_fchmodat2 452
++#  elif defined(__m68k__)
++#    define systemd_NR_fchmodat2 452
++#  elif defined(_MIPS_SIM)
++#    if _MIPS_SIM == _MIPS_SIM_ABI32
++#      define systemd_NR_fchmodat2 4452
++#    elif _MIPS_SIM == _MIPS_SIM_NABI32
++#      define systemd_NR_fchmodat2 6452
++#    elif _MIPS_SIM == _MIPS_SIM_ABI64
++#      define systemd_NR_fchmodat2 5452
++#    else
++#      error "Unknown MIPS ABI"
++#    endif
++#  elif defined(__hppa__)
++#    define systemd_NR_fchmodat2 452
++#  elif defined(__powerpc__)
++#    define systemd_NR_fchmodat2 452
++#  elif defined(__riscv)
++#    if __riscv_xlen == 32
++#      define systemd_NR_fchmodat2 452
++#    elif __riscv_xlen == 64
++#      define systemd_NR_fchmodat2 452
++#    else
++#      error "Unknown RISC-V ABI"
++#    endif
++#  elif defined(__s390__)
++#    define systemd_NR_fchmodat2 452
++#  elif defined(__sh__)
++#    define systemd_NR_fchmodat2 452
++#  elif defined(__sparc__)
++#    define systemd_NR_fchmodat2 452
++#  elif defined(__x86_64__)
++#    if defined(__ILP32__)
++#      define systemd_NR_fchmodat2 (452 | /* __X32_SYSCALL_BIT */ 0x40000000)
++#    else
++#      define systemd_NR_fchmodat2 452
++#    endif
++#  elif !defined(missing_arch_template)
++#    warning "fchmodat2() syscall number is unknown for your architecture"
++#  endif
++
++/* may be an (invalid) negative number due to libseccomp, see PR 13319 */
++#  if defined __NR_fchmodat2 && __NR_fchmodat2 >= 0
++#    if defined systemd_NR_fchmodat2
++static_assert(__NR_fchmodat2 == systemd_NR_fchmodat2, "");
++#    endif
++#  else
++#    if defined __NR_fchmodat2
++#      undef __NR_fchmodat2
++#    endif
++#    if defined systemd_NR_fchmodat2 && systemd_NR_fchmodat2 >= 0
++#      define __NR_fchmodat2 systemd_NR_fchmodat2
++#    endif
++#  endif
++#endif
++
 +#ifndef __IGNORE_fsconfig
 +#  if defined(__aarch64__)
 +#    define systemd_NR_fsconfig 431
@@ -413,13 +548,76 @@ index da555e7..529696b 100644
 +#  endif
 +#endif
 +
- #ifndef __IGNORE_kexec_file_load
- #  if defined(__aarch64__)
- #    define systemd_NR_kexec_file_load 294
-@@ -194,6 +544,286 @@ static_assert(__NR_kexec_file_load == systemd_NR_kexec_file_load, "");
- #  endif
- #endif
- 
++#ifndef __IGNORE_kexec_file_load
++#  if defined(__aarch64__)
++#    define systemd_NR_kexec_file_load 294
++#  elif defined(__alpha__)
++#    define systemd_NR_kexec_file_load -1
++#  elif defined(__arc__) || defined(__tilegx__)
++#    define systemd_NR_kexec_file_load 294
++#  elif defined(__arm__)
++#    define systemd_NR_kexec_file_load 401
++#  elif defined(__i386__)
++#    define systemd_NR_kexec_file_load -1
++#  elif defined(__ia64__)
++#    define systemd_NR_kexec_file_load -1
++#  elif defined(__loongarch_lp64)
++#    define systemd_NR_kexec_file_load 294
++#  elif defined(__m68k__)
++#    define systemd_NR_kexec_file_load -1
++#  elif defined(_MIPS_SIM)
++#    if _MIPS_SIM == _MIPS_SIM_ABI32
++#      define systemd_NR_kexec_file_load -1
++#    elif _MIPS_SIM == _MIPS_SIM_NABI32
++#      define systemd_NR_kexec_file_load -1
++#    elif _MIPS_SIM == _MIPS_SIM_ABI64
++#      define systemd_NR_kexec_file_load -1
++#    else
++#      error "Unknown MIPS ABI"
++#    endif
++#  elif defined(__hppa__)
++#    define systemd_NR_kexec_file_load 355
++#  elif defined(__powerpc__)
++#    define systemd_NR_kexec_file_load 382
++#  elif defined(__riscv)
++#    if __riscv_xlen == 32
++#      define systemd_NR_kexec_file_load 294
++#    elif __riscv_xlen == 64
++#      define systemd_NR_kexec_file_load 294
++#    else
++#      error "Unknown RISC-V ABI"
++#    endif
++#  elif defined(__s390__)
++#    define systemd_NR_kexec_file_load 381
++#  elif defined(__sh__)
++#    define systemd_NR_kexec_file_load -1
++#  elif defined(__sparc__)
++#    define systemd_NR_kexec_file_load -1
++#  elif defined(__x86_64__)
++#    if defined(__ILP32__)
++#      define systemd_NR_kexec_file_load (320 | /* __X32_SYSCALL_BIT */ 0x40000000)
++#    else
++#      define systemd_NR_kexec_file_load 320
++#    endif
++#  elif !defined(missing_arch_template)
++#    warning "kexec_file_load() syscall number is unknown for your architecture"
++#  endif
++
++/* may be an (invalid) negative number due to libseccomp, see PR 13319 */
++#  if defined __NR_kexec_file_load && __NR_kexec_file_load >= 0
++#    if defined systemd_NR_kexec_file_load
++static_assert(__NR_kexec_file_load == systemd_NR_kexec_file_load, "");
++#    endif
++#  else
++#    if defined __NR_kexec_file_load
++#      undef __NR_kexec_file_load
++#    endif
++#    if defined systemd_NR_kexec_file_load && systemd_NR_kexec_file_load >= 0
++#      define __NR_kexec_file_load systemd_NR_kexec_file_load
++#    endif
++#  endif
++#endif
++
 +#ifndef __IGNORE_mount_setattr
 +#  if defined(__aarch64__)
 +#    define systemd_NR_mount_setattr 442
@@ -493,137 +691,193 @@ index da555e7..529696b 100644
 +#ifndef __IGNORE_move_mount
 +#  if defined(__aarch64__)
 +#    define systemd_NR_move_mount 429
-+#  elif defined(__alpha__)
+ #  elif defined(__alpha__)
+-#    define systemd_NR_fchmodat2 562
 +#    define systemd_NR_move_mount 539
-+#  elif defined(__arc__) || defined(__tilegx__)
+ #  elif defined(__arc__) || defined(__tilegx__)
+-#    define systemd_NR_fchmodat2 452
 +#    define systemd_NR_move_mount 429
-+#  elif defined(__arm__)
+ #  elif defined(__arm__)
+-#    define systemd_NR_fchmodat2 452
 +#    define systemd_NR_move_mount 429
-+#  elif defined(__i386__)
+ #  elif defined(__i386__)
+-#    define systemd_NR_fchmodat2 452
 +#    define systemd_NR_move_mount 429
-+#  elif defined(__ia64__)
+ #  elif defined(__ia64__)
+-#    define systemd_NR_fchmodat2 1476
 +#    define systemd_NR_move_mount 1453
-+#  elif defined(__loongarch_lp64)
+ #  elif defined(__loongarch_lp64)
+-#    define systemd_NR_fchmodat2 452
 +#    define systemd_NR_move_mount 429
-+#  elif defined(__m68k__)
+ #  elif defined(__m68k__)
+-#    define systemd_NR_fchmodat2 452
 +#    define systemd_NR_move_mount 429
-+#  elif defined(_MIPS_SIM)
-+#    if _MIPS_SIM == _MIPS_SIM_ABI32
+ #  elif defined(_MIPS_SIM)
+ #    if _MIPS_SIM == _MIPS_SIM_ABI32
+-#      define systemd_NR_fchmodat2 4452
 +#      define systemd_NR_move_mount 4429
-+#    elif _MIPS_SIM == _MIPS_SIM_NABI32
+ #    elif _MIPS_SIM == _MIPS_SIM_NABI32
+-#      define systemd_NR_fchmodat2 6452
 +#      define systemd_NR_move_mount 6429
-+#    elif _MIPS_SIM == _MIPS_SIM_ABI64
+ #    elif _MIPS_SIM == _MIPS_SIM_ABI64
+-#      define systemd_NR_fchmodat2 5452
 +#      define systemd_NR_move_mount 5429
-+#    else
-+#      error "Unknown MIPS ABI"
-+#    endif
-+#  elif defined(__hppa__)
+ #    else
+ #      error "Unknown MIPS ABI"
+ #    endif
+ #  elif defined(__hppa__)
+-#    define systemd_NR_fchmodat2 452
 +#    define systemd_NR_move_mount 429
-+#  elif defined(__powerpc__)
+ #  elif defined(__powerpc__)
+-#    define systemd_NR_fchmodat2 452
 +#    define systemd_NR_move_mount 429
-+#  elif defined(__riscv)
-+#    if __riscv_xlen == 32
+ #  elif defined(__riscv)
+ #    if __riscv_xlen == 32
+-#      define systemd_NR_fchmodat2 452
 +#      define systemd_NR_move_mount 429
-+#    elif __riscv_xlen == 64
+ #    elif __riscv_xlen == 64
+-#      define systemd_NR_fchmodat2 452
 +#      define systemd_NR_move_mount 429
-+#    else
-+#      error "Unknown RISC-V ABI"
-+#    endif
-+#  elif defined(__s390__)
+ #    else
+ #      error "Unknown RISC-V ABI"
+ #    endif
+ #  elif defined(__s390__)
+-#    define systemd_NR_fchmodat2 452
 +#    define systemd_NR_move_mount 429
-+#  elif defined(__sh__)
+ #  elif defined(__sh__)
+-#    define systemd_NR_fchmodat2 452
 +#    define systemd_NR_move_mount 429
-+#  elif defined(__sparc__)
+ #  elif defined(__sparc__)
+-#    define systemd_NR_fchmodat2 452
 +#    define systemd_NR_move_mount 429
-+#  elif defined(__x86_64__)
-+#    if defined(__ILP32__)
+ #  elif defined(__x86_64__)
+ #    if defined(__ILP32__)
+-#      define systemd_NR_fchmodat2 (452 | /* __X32_SYSCALL_BIT */ 0x40000000)
 +#      define systemd_NR_move_mount (429 | /* __X32_SYSCALL_BIT */ 0x40000000)
-+#    else
+ #    else
+-#      define systemd_NR_fchmodat2 452
 +#      define systemd_NR_move_mount 429
-+#    endif
-+#  elif !defined(missing_arch_template)
+ #    endif
+ #  elif !defined(missing_arch_template)
+-#    warning "fchmodat2() syscall number is unknown for your architecture"
 +#    warning "move_mount() syscall number is unknown for your architecture"
-+#  endif
-+
-+/* may be an (invalid) negative number due to libseccomp, see PR 13319 */
+ #  endif
+ 
+ /* may be an (invalid) negative number due to libseccomp, see PR 13319 */
+-#  if defined __NR_fchmodat2 && __NR_fchmodat2 >= 0
+-#    if defined systemd_NR_fchmodat2
+-static_assert(__NR_fchmodat2 == systemd_NR_fchmodat2, "");
 +#  if defined __NR_move_mount && __NR_move_mount >= 0
 +#    if defined systemd_NR_move_mount
 +static_assert(__NR_move_mount == systemd_NR_move_mount, "");
-+#    endif
-+#  else
+ #    endif
+ #  else
+-#    if defined __NR_fchmodat2
+-#      undef __NR_fchmodat2
 +#    if defined __NR_move_mount
 +#      undef __NR_move_mount
-+#    endif
+ #    endif
+-#    if defined systemd_NR_fchmodat2 && systemd_NR_fchmodat2 >= 0
+-#      define __NR_fchmodat2 systemd_NR_fchmodat2
 +#    if defined systemd_NR_move_mount && systemd_NR_move_mount >= 0
 +#      define __NR_move_mount systemd_NR_move_mount
-+#    endif
-+#  endif
-+#endif
-+
+ #    endif
+ #  endif
+ #endif
+ 
+-#ifndef __IGNORE_kexec_file_load
 +#ifndef __IGNORE_openat2
-+#  if defined(__aarch64__)
+ #  if defined(__aarch64__)
+-#    define systemd_NR_kexec_file_load 294
 +#    define systemd_NR_openat2 437
-+#  elif defined(__alpha__)
+ #  elif defined(__alpha__)
+-#    define systemd_NR_kexec_file_load -1
 +#    define systemd_NR_openat2 547
-+#  elif defined(__arc__) || defined(__tilegx__)
+ #  elif defined(__arc__) || defined(__tilegx__)
+-#    define systemd_NR_kexec_file_load 294
 +#    define systemd_NR_openat2 437
-+#  elif defined(__arm__)
+ #  elif defined(__arm__)
+-#    define systemd_NR_kexec_file_load 401
 +#    define systemd_NR_openat2 437
-+#  elif defined(__i386__)
+ #  elif defined(__i386__)
+-#    define systemd_NR_kexec_file_load -1
 +#    define systemd_NR_openat2 437
-+#  elif defined(__ia64__)
+ #  elif defined(__ia64__)
+-#    define systemd_NR_kexec_file_load -1
 +#    define systemd_NR_openat2 1461
-+#  elif defined(__loongarch_lp64)
+ #  elif defined(__loongarch_lp64)
+-#    define systemd_NR_kexec_file_load 294
 +#    define systemd_NR_openat2 437
-+#  elif defined(__m68k__)
+ #  elif defined(__m68k__)
+-#    define systemd_NR_kexec_file_load -1
 +#    define systemd_NR_openat2 437
-+#  elif defined(_MIPS_SIM)
-+#    if _MIPS_SIM == _MIPS_SIM_ABI32
+ #  elif defined(_MIPS_SIM)
+ #    if _MIPS_SIM == _MIPS_SIM_ABI32
+-#      define systemd_NR_kexec_file_load -1
 +#      define systemd_NR_openat2 4437
-+#    elif _MIPS_SIM == _MIPS_SIM_NABI32
+ #    elif _MIPS_SIM == _MIPS_SIM_NABI32
+-#      define systemd_NR_kexec_file_load -1
 +#      define systemd_NR_openat2 6437
-+#    elif _MIPS_SIM == _MIPS_SIM_ABI64
+ #    elif _MIPS_SIM == _MIPS_SIM_ABI64
+-#      define systemd_NR_kexec_file_load -1
 +#      define systemd_NR_openat2 5437
-+#    else
-+#      error "Unknown MIPS ABI"
-+#    endif
-+#  elif defined(__hppa__)
+ #    else
+ #      error "Unknown MIPS ABI"
+ #    endif
+ #  elif defined(__hppa__)
+-#    define systemd_NR_kexec_file_load 355
 +#    define systemd_NR_openat2 437
-+#  elif defined(__powerpc__)
+ #  elif defined(__powerpc__)
+-#    define systemd_NR_kexec_file_load 382
 +#    define systemd_NR_openat2 437
-+#  elif defined(__riscv)
-+#    if __riscv_xlen == 32
+ #  elif defined(__riscv)
+ #    if __riscv_xlen == 32
+-#      define systemd_NR_kexec_file_load 294
 +#      define systemd_NR_openat2 437
-+#    elif __riscv_xlen == 64
+ #    elif __riscv_xlen == 64
+-#      define systemd_NR_kexec_file_load 294
 +#      define systemd_NR_openat2 437
-+#    else
-+#      error "Unknown RISC-V ABI"
-+#    endif
-+#  elif defined(__s390__)
+ #    else
+ #      error "Unknown RISC-V ABI"
+ #    endif
+ #  elif defined(__s390__)
+-#    define systemd_NR_kexec_file_load 381
 +#    define systemd_NR_openat2 437
-+#  elif defined(__sh__)
+ #  elif defined(__sh__)
+-#    define systemd_NR_kexec_file_load -1
 +#    define systemd_NR_openat2 437
-+#  elif defined(__sparc__)
+ #  elif defined(__sparc__)
+-#    define systemd_NR_kexec_file_load -1
 +#    define systemd_NR_openat2 437
-+#  elif defined(__x86_64__)
-+#    if defined(__ILP32__)
+ #  elif defined(__x86_64__)
+ #    if defined(__ILP32__)
+-#      define systemd_NR_kexec_file_load (320 | /* __X32_SYSCALL_BIT */ 0x40000000)
 +#      define systemd_NR_openat2 (437 | /* __X32_SYSCALL_BIT */ 0x40000000)
-+#    else
+ #    else
+-#      define systemd_NR_kexec_file_load 320
 +#      define systemd_NR_openat2 437
-+#    endif
-+#  elif !defined(missing_arch_template)
+ #    endif
+ #  elif !defined(missing_arch_template)
+-#    warning "kexec_file_load() syscall number is unknown for your architecture"
 +#    warning "openat2() syscall number is unknown for your architecture"
-+#  endif
-+
-+/* may be an (invalid) negative number due to libseccomp, see PR 13319 */
+ #  endif
+ 
+ /* may be an (invalid) negative number due to libseccomp, see PR 13319 */
+-#  if defined __NR_kexec_file_load && __NR_kexec_file_load >= 0
+-#    if defined systemd_NR_kexec_file_load
+-static_assert(__NR_kexec_file_load == systemd_NR_kexec_file_load, "");
 +#  if defined __NR_openat2 && __NR_openat2 >= 0
 +#    if defined systemd_NR_openat2
 +static_assert(__NR_openat2 == systemd_NR_openat2, "");
-+#    endif
-+#  else
+ #    endif
+ #  else
+-#    if defined __NR_kexec_file_load
+-#      undef __NR_kexec_file_load
 +#    if defined __NR_openat2
 +#      undef __NR_openat2
-+#    endif
+ #    endif
+-#    if defined systemd_NR_kexec_file_load && systemd_NR_kexec_file_load >= 0
+-#      define __NR_kexec_file_load systemd_NR_kexec_file_load
 +#    if defined systemd_NR_openat2 && systemd_NR_openat2 >= 0
 +#      define __NR_openat2 systemd_NR_openat2
 +#    endif
@@ -696,14 +950,10 @@ index da555e7..529696b 100644
 +#    endif
 +#    if defined systemd_NR_open_tree && systemd_NR_open_tree >= 0
 +#      define __NR_open_tree systemd_NR_open_tree
-+#    endif
-+#  endif
-+#endif
-+
- #ifndef __IGNORE_open_tree_attr
- #  if defined(__aarch64__)
- #    define systemd_NR_open_tree_attr 467
-@@ -264,6 +894,146 @@ static_assert(__NR_open_tree_attr == systemd_NR_open_tree_attr, "");
+ #    endif
+ #  endif
+ #endif
+@@ -264,6 +964,146 @@ static_assert(__NR_open_tree_attr == systemd_NR_open_tree_attr, "");
  #  endif
  #endif
  
@@ -850,7 +1100,7 @@ index da555e7..529696b 100644
  #ifndef __IGNORE_quotactl_fd
  #  if defined(__aarch64__)
  #    define systemd_NR_quotactl_fd 443
-@@ -473,3 +1243,73 @@ static_assert(__NR_setxattrat == systemd_NR_setxattrat, "");
+@@ -473,3 +1313,73 @@ static_assert(__NR_setxattrat == systemd_NR_setxattrat, "");
  #    endif
  #  endif
  #endif
