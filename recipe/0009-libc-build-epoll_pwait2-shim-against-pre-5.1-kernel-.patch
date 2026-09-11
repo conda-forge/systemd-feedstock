@@ -1,0 +1,44 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mark Harfouche <mark.harfouche@gmail.com>
+Date: Fri, 11 Sep 2026 15:59:54 -0400
+Subject: [PATCH] libc: build epoll_pwait2() shim against pre-5.1 kernel
+ headers
+
+v261.3 switched the epoll_pwait2() shim from resolving the glibc symbol to
+issuing the syscall itself (upstream commit a2de89f622a1, "libc: call
+epoll_pwait2 syscall directly instead of resolving glibc symbols"). It now
+converts the timeout into a struct __kernel_timespec, which it takes from
+<linux/time_types.h> -- a header that only exists since kernel v5.1. The
+kernel 3.10 UAPI headers in conda-forge's sysroot 2.17 lack it:
+
+  src/libc/epoll.c:4:10: fatal error: linux/time_types.h: No such file or directory
+
+Fall back to spelling out the struct when the header is missing. Its layout
+is part of the syscall ABI (two 64-bit fields everywhere), so this is exactly
+what the kernel expects. The syscall number itself comes from the generated
+<sys/syscall.h>.
+---
+ src/libc/epoll.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/src/libc/epoll.c b/src/libc/epoll.c
+index 9bd1645..ac2c232 100644
+--- a/src/libc/epoll.c
++++ b/src/libc/epoll.c
+@@ -1,7 +1,16 @@
+ /* SPDX-License-Identifier: LGPL-2.1-or-later */
+ 
+ #include <errno.h>              /* IWYU pragma: keep */
++#if __has_include(<linux/time_types.h>)
+ #include <linux/time_types.h>
++#else
++/* linux/time_types.h appeared in kernel v5.1; spell out the one struct we need for older UAPI headers.
++ * Its layout is fixed by the syscall ABI: two 64-bit fields on every architecture. */
++struct __kernel_timespec {
++        long long tv_sec;
++        long long tv_nsec;
++};
++#endif
+ #include <sys/epoll.h>
+ #include <sys/syscall.h>
+ #include <unistd.h>
