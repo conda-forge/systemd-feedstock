@@ -1,6 +1,6 @@
 {% set name = "systemd" %}
-{% set version = "261.2" %}
-{% set build = 1 %}
+{% set version = "261.3" %}
+{% set build = 0 %}
 {% set libudev_abi_version = "1" %}
 {% set libsystemd_abi_version = "0" %}
 
@@ -10,7 +10,7 @@ package:
 
 source:
   url: https://github.com/{{ name }}/{{ name }}/archive/v{{ version }}.tar.gz
-  sha256: ed1059ff964f5df35b6056434cc17cc83f86dc913f10489948a0b19b6081c5ec
+  sha256: 3f8d3d3969af7214bda600930e14c6a24135eb3dce1ba7f1b980b74e6dc15b72
   patches:
     - 0001-sys-syscall.h-generate-numbers-for-the-syscalls-our-.patch
     - 0002-uapi-add-linux-kcmp.h.patch
