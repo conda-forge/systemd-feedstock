@@ -112,31 +112,73 @@ conda config --add channels conda-forge
 conda config --set channel_priority strict
 ```
 
-Once the `conda-forge` channel has been enabled, `libsystemd, libsystemd0, libudev, libudev1` can be installed with `conda`:
+How to use
+----------
+
+<details>
+<summary>With conda</summary>
 
 ```
 conda install libsystemd libsystemd0 libudev libudev1
 ```
 
-or with `mamba`:
+</details>
+
+<details>
+<summary>With mamba</summary>
 
 ```
 mamba install libsystemd libsystemd0 libudev libudev1
 ```
 
-It is possible to list all of the versions of `libsystemd` available on your platform with `conda`:
+</details>
+
+<details>
+<summary>With pixi</summary>
+
+```
+# for adding to your local project
+pixi add libsystemd libsystemd0 libudev libudev1
+# for installing globally
+pixi global install libsystemd libsystemd0 libudev libudev1
+```
+
+</details>
+
+Search package versions
+-----------------------
+
+It is possible to list all of the versions of `libsystemd` available on your platform:
+
+<details>
+<summary>With conda</summary>
 
 ```
 conda search libsystemd --channel conda-forge
 ```
 
-or with `mamba`:
+</details>
+
+<details>
+<summary>With mamba</summary>
 
 ```
 mamba search libsystemd --channel conda-forge
 ```
 
-Alternatively, `mamba repoquery` may provide more information:
+</details>
+
+<details>
+<summary>With pixi</summary>
+
+```
+pixi search libsystemd --channel conda-forge
+```
+
+</details>
+
+<details>
+<summary>With mamba repoquery, which may provide more information</summary>
 
 ```
 # Search all versions available on your platform:
@@ -148,6 +190,8 @@ mamba repoquery whoneeds libsystemd --channel conda-forge
 # List dependencies of `libsystemd`:
 mamba repoquery depends libsystemd --channel conda-forge
 ```
+
+</details>
 
 
 About conda-forge

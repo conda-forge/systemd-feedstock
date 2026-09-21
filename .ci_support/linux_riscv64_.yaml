@@ -29,6 +29,6 @@ openssl:
 p11_kit:
 - '0.26'
 target_platform:
-- linux-64
+- linux-riscv64
 zstd:
 - '1.5'
