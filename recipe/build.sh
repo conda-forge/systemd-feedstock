@@ -8,7 +8,6 @@ meson_config_args=(
     -Dmode=release
     -Dsplit-bin=false
     -Dsysconfdir=etc
-    -Dsysvinit-path=""
     -Dversion-tag=condaforge
     # general toggles
     -Dcreate-log-dirs=false
