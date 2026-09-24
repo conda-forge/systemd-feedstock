@@ -19,7 +19,10 @@ and glibc 2.17 that conda-forge's sysroot 2.17 ships:
   sys/mman.h     MCL_ONFAULT
   sys/socket.h   SO_COOKIE, SO_PEERGROUPS, SO_BINDTOIFINDEX, SOL_NETLINK
   sys/quota.h    PRJQUOTA
-  linux/audit.h  AUDIT_NLGRP_READLOG
+  journald-audit.c  AUDIT_NLGRP_READLOG (the linux/audit.h wrapper is gone as
+                    of v262, systemd commit 0d06dbabc364)
+  bits/hwcap.h   HWCAP2_{DCPODP,SVE2,...,BTI,MTE} (aarch64, bits 0-18: the
+                 override only covers what glibc 2.34 lacks)
   sys/ioctl.h    TIOCGPTPEER (new wrapper)
   sys/timerfd.h  TFD_TIMER_CANCEL_ON_SET (new wrapper)
 
@@ -29,22 +32,91 @@ parisc, powerpc and sparc) while that relation holds everywhere.
 
 AUDIT_NLGRP_READLOG is an enum constant rather than a macro, so #ifndef
 cannot see it and we may define a macro of the same name on top of the
-already declared enum. That is harmless, and the static_assert() beside it
+already declared enum. That is harmless, and the assertion beside it
 holds either way.
 ---
+ src/include/override/bits/hwcap.h  | 57 ++++++++++++++++++++++++++++++
  src/include/override/fcntl.h       | 42 ++++++++++++++++++++++
- src/include/override/linux/audit.h |  9 +++++
  src/include/override/sched.h       | 16 +++++++++
- src/include/override/signal.h      | 56 ++++++++++++++++++++++++++++++
+ src/include/override/signal.h      | 56 +++++++++++++++++++++++++++++
  src/include/override/sys/ioctl.h   | 13 +++++++
  src/include/override/sys/mman.h    | 10 ++++++
  src/include/override/sys/quota.h   |  6 ++++
  src/include/override/sys/socket.h  | 24 +++++++++++++
  src/include/override/sys/timerfd.h | 10 ++++++
- 9 files changed, 186 insertions(+)
+ src/journal/journald-audit.c       |  9 +++++
+ 10 files changed, 243 insertions(+)
  create mode 100644 src/include/override/sys/ioctl.h
  create mode 100644 src/include/override/sys/timerfd.h
 
+diff --git a/src/include/override/bits/hwcap.h b/src/include/override/bits/hwcap.h
+index 154ec71..4f0ed44 100644
+--- a/src/include/override/bits/hwcap.h
++++ b/src/include/override/bits/hwcap.h
+@@ -54,6 +54,63 @@
+ #define HWCAP_SME_SMOP4                 (1UL << 47)
+ #endif
+ 
++#ifndef HWCAP2_DCPODP
++#define HWCAP2_DCPODP                   (1 << 0)
++#endif
++#ifndef HWCAP2_SVE2
++#define HWCAP2_SVE2                     (1 << 1)
++#endif
++#ifndef HWCAP2_SVEAES
++#define HWCAP2_SVEAES                   (1 << 2)
++#endif
++#ifndef HWCAP2_SVEPMULL
++#define HWCAP2_SVEPMULL                 (1 << 3)
++#endif
++#ifndef HWCAP2_SVEBITPERM
++#define HWCAP2_SVEBITPERM               (1 << 4)
++#endif
++#ifndef HWCAP2_SVESHA3
++#define HWCAP2_SVESHA3                  (1 << 5)
++#endif
++#ifndef HWCAP2_SVESM4
++#define HWCAP2_SVESM4                   (1 << 6)
++#endif
++#ifndef HWCAP2_FLAGM2
++#define HWCAP2_FLAGM2                   (1 << 7)
++#endif
++#ifndef HWCAP2_FRINT
++#define HWCAP2_FRINT                    (1 << 8)
++#endif
++#ifndef HWCAP2_SVEI8MM
++#define HWCAP2_SVEI8MM                  (1 << 9)
++#endif
++#ifndef HWCAP2_SVEF32MM
++#define HWCAP2_SVEF32MM                 (1 << 10)
++#endif
++#ifndef HWCAP2_SVEF64MM
++#define HWCAP2_SVEF64MM                 (1 << 11)
++#endif
++#ifndef HWCAP2_SVEBF16
++#define HWCAP2_SVEBF16                  (1 << 12)
++#endif
++#ifndef HWCAP2_I8MM
++#define HWCAP2_I8MM                     (1 << 13)
++#endif
++#ifndef HWCAP2_BF16
++#define HWCAP2_BF16                     (1 << 14)
++#endif
++#ifndef HWCAP2_DGH
++#define HWCAP2_DGH                      (1 << 15)
++#endif
++#ifndef HWCAP2_RNG
++#define HWCAP2_RNG                      (1 << 16)
++#endif
++#ifndef HWCAP2_BTI
++#define HWCAP2_BTI                      (1 << 17)
++#endif
++#ifndef HWCAP2_MTE
++#define HWCAP2_MTE                      (1 << 18)
++#endif
+ #ifndef HWCAP2_ECV
+ #define HWCAP2_ECV                      (1 << 19)
+ #endif
 diff --git a/src/include/override/fcntl.h b/src/include/override/fcntl.h
 index bf42009..2d9049d 100644
 --- a/src/include/override/fcntl.h
@@ -98,28 +170,8 @@ index bf42009..2d9049d 100644
  /* This is defined since glibc-2.39. */
  #ifndef F_SEAL_EXEC
  #define F_SEAL_EXEC     0x0020  /* prevent chmod modifying exec bits */
-diff --git a/src/include/override/linux/audit.h b/src/include/override/linux/audit.h
-index abdd25b..616d73e 100644
---- a/src/include/override/linux/audit.h
-+++ b/src/include/override/linux/audit.h
-@@ -14,6 +14,15 @@
-  * of generate-audit_type-list.sh becomes more complex.
-  */
- 
-+/* AUDIT_NLGRP_READLOG is an enum constant rather than a macro (kernel v3.16,
-+ * 451f931790badc4d0d9b2f195bb2f2f1e1665e26), so #ifndef cannot see it and we may end up defining a
-+ * macro of the same name on top of the already declared enum. That is harmless, and the assertion
-+ * below holds either way. */
-+#ifndef AUDIT_NLGRP_READLOG
-+#  define AUDIT_NLGRP_READLOG 1 /* "best effort" read only socket */
-+#endif
-+static_assert(AUDIT_NLGRP_READLOG == 1, "");
-+
- #ifndef AUDIT_SERVICE_START
- #  define AUDIT_SERVICE_START 1130 /* Service (daemon) start */
- #else
 diff --git a/src/include/override/sched.h b/src/include/override/sched.h
-index 0c12362..d7a775c 100644
+index 2305958..1477664 100644
 --- a/src/include/override/sched.h
 +++ b/src/include/override/sched.h
 @@ -34,6 +34,22 @@
@@ -322,3 +374,23 @@ index 0000000..eaeee0b
 +#ifndef TFD_TIMER_CANCEL_ON_SET
 +#define TFD_TIMER_CANCEL_ON_SET (1 << 1)
 +#endif
+diff --git a/src/journal/journald-audit.c b/src/journal/journald-audit.c
+index 173fe99..1e5a1f4 100644
+--- a/src/journal/journald-audit.c
++++ b/src/journal/journald-audit.c
+@@ -19,6 +19,15 @@
+ #include "string-util.h"
+ #include "time-util.h"
+ 
++/* AUDIT_NLGRP_READLOG is an enum constant rather than a macro (kernel v3.16,
++ * 451f931790badc4d0d9b2f195bb2f2f1e1665e26), so #ifndef cannot see it and we may end up defining a
++ * macro of the same name on top of the already declared enum. That is harmless, and the assertion
++ * below holds either way. */
++#ifndef AUDIT_NLGRP_READLOG
++#  define AUDIT_NLGRP_READLOG 1 /* "best effort" read only socket */
++#endif
++assert_cc(AUDIT_NLGRP_READLOG == 1);
++
+ typedef struct MapField {
+         const char *audit_field;
+         const char *journal_field;

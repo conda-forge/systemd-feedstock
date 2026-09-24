@@ -17,10 +17,10 @@ the 'userspace' dependency, which every target already pulls in.
  1 file changed, 15 insertions(+)
 
 diff --git a/meson.build b/meson.build
-index 438ce4f..9c40d1f 100644
+index 2db5138..8468575 100644
 --- a/meson.build
 +++ b/meson.build
-@@ -1008,6 +1008,20 @@ endif
+@@ -1025,6 +1025,20 @@ endif
  
  libm = cc.find_library('m')
  
@@ -38,10 +38,10 @@ index 438ce4f..9c40d1f 100644
 +        endif
 +endforeach
 +
- # Header presence check only — dgettext itself is resolved via dlopen_libintl() at runtime, so we never
- # link against libintl. On glibc dgettext lives in libc; on musl gettext-dev provides libintl.h alongside
- # libintl.so.8 which we dlopen() if present.
-@@ -1696,6 +1710,7 @@ jinja2_cmdline = [meson_render_jinja2_py, config_h]
+ # On some architectures, libatomic is required. But on some installations,
+ # it is found, but actual linking fails. So let's try to use it opportunistically.
+ # If it is installed, but not needed, it will be dropped because of --as-needed.
+@@ -1813,6 +1827,7 @@ jinja2_cmdline = [meson_render_jinja2_py, config_h]
  userspace = declare_dependency(
          compile_args : userspace_c_args,
          link_args : userspace_c_ld_args,
