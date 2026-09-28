@@ -1,6 +1,6 @@
 bot:
   abi_migration_branches:
-    - stdlib_217
+  - stdlib_217
 conda_build:
   pkg_format: '2'
 conda_forge_output_validation: true
@@ -9,3 +9,5 @@ github:
   tooling_branch_name: main
 provider:
   linux_aarch64: default
+  linux_riscv64: default
+test: native_and_emulated
