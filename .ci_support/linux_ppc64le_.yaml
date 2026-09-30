@@ -5,7 +5,7 @@ c_compiler_version:
 c_stdlib:
 - sysroot
 c_stdlib_version:
-- '2.39'
+- '2.17'
 channel_sources:
 - conda-forge
 channel_targets:
@@ -29,6 +29,6 @@ openssl:
 p11_kit:
 - '0.26'
 target_platform:
-- linux-riscv64
+- linux-ppc64le
 zstd:
 - '1.5'
