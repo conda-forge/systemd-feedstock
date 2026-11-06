@@ -35,7 +35,7 @@ requirements:
     - jinja2
     - meson
     - ninja
-    - pkg-config
+    - pkgconf
     - python *
   host:
     - elfutils
