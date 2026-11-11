@@ -25,7 +25,7 @@ libsystemd:
 libudev:
 - '257'
 lz4_c:
-- '1.10'
+- '1.11'
 openssl:
 - '3.5'
 p11_kit:
